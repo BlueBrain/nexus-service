@@ -24,13 +24,55 @@ scalafmt: {
 }
  */
 
+val akkaVersion          = "2.5.9"
+val akkaHttpVersion      = "10.0.11"
+val akkaHttpCirceVersion = "1.19.0"
+val catsVersion          = "1.0.1"
+val circeVersion         = "0.9.1"
+val commonsVersion       = "0.7.6"
+val journalVersion       = "3.0.19"
+val scalaTestVersion     = "3.0.5"
+
+lazy val akkaTestKit        = "com.typesafe.akka"       %% "akka-testkit"         % akkaVersion
+lazy val akkaHttp           = "com.typesafe.akka"       %% "akka-http"            % akkaHttpVersion
+lazy val akkaHttpTestKit    = "com.typesafe.akka"       %% "akka-http-testkit"    % akkaHttpVersion
+lazy val akkaHttpCirce      = "de.heikoseeberger"       %% "akka-http-circe"      % akkaHttpCirceVersion
+lazy val catsCore           = "org.typelevel"           %% "cats-core"            % catsVersion
+lazy val circeCore          = "io.circe"                %% "circe-core"           % circeVersion
+lazy val circeParser        = "io.circe"                %% "circe-parser"         % circeVersion
+lazy val circeGenericExtras = "io.circe"                %% "circe-generic-extras" % circeVersion
+lazy val commonsTest        = "ch.epfl.bluebrain.nexus" %% "commons-test"         % commonsVersion
+lazy val journal            = "io.verizon.journal"      %% "core"                 % journalVersion
+lazy val scalaTest          = "org.scalatest"           %% "scalatest"            % scalaTestVersion
+
+lazy val serviceHttp = project
+  .in(file("modules/http"))
+  .settings(
+    name       := "service-http",
+    moduleName := "service-http",
+    libraryDependencies ++= Seq(
+      akkaHttp,
+      akkaHttpCirce,
+      catsCore,
+      circeCore,
+      circeParser,
+      journal,
+      akkaTestKit        % Test,
+      akkaHttpTestKit    % Test,
+      circeGenericExtras % Test,
+      commonsTest        % Test,
+      scalaTest          % Test
+    )
+  )
+
 lazy val root = project
   .in(file("."))
   .settings(noPublish)
   .settings(
     name       := "service",
-    moduleName := "service"
+    moduleName := "service",
   )
+  .aggregate(serviceHttp)
 
 /* ********************************************************
  ******************** Grouped Settings ********************
@@ -58,3 +100,5 @@ inThisBuild(
     releaseEarlyNoGpg             := true,
     releaseEarlyEnableSyncToMaven := false,
   ))
+
+addCommandAlias("review", ";clean;scalafmtSbtCheck;coverage;scapegoat;test;coverageReport;coverageAggregate")
