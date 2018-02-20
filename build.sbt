@@ -31,7 +31,6 @@ val catsVersion          = "1.0.1"
 val circeVersion         = "0.9.1"
 val commonsVersion       = "0.7.6"
 val journalVersion       = "3.0.19"
-val kamonVersion         = "1.0.1"
 val scalaTestVersion     = "3.0.5"
 
 lazy val akkaTestKit        = "com.typesafe.akka"       %% "akka-testkit"         % akkaVersion
@@ -45,13 +44,13 @@ lazy val circeGenericExtras = "io.circe"                %% "circe-generic-extras
 lazy val commonsTest        = "ch.epfl.bluebrain.nexus" %% "commons-test"         % commonsVersion
 lazy val journal            = "io.verizon.journal"      %% "core"                 % journalVersion
 
-lazy val kamonCore       = "io.kamon" %% "kamon-core"            % kamonVersion
-lazy val kamonPrometheus = "io.kamon" %% "kamon-prometheus"      % kamonVersion
-lazy val kamonJaeger     = "io.kamon" %% "kamon-jaeger"          % kamonVersion
-lazy val kamonMetrics    = "io.kamon" %% "kamon-system-metrics"  % kamonVersion
-lazy val kamonAkka       = "io.kamon" %% "kamon-akka-2.5"        % kamonVersion
-lazy val kamonAkkaHttp   = "io.kamon" %% "kamon-akka-http-2.5"   % kamonVersion
-lazy val kamonAkkaRemote = "io.kamon" %% "kamon-akka-remote-2.5" % kamonVersion
+lazy val kamonCore       = "io.kamon" %% "kamon-core"            % "1.0.1"
+lazy val kamonPrometheus = "io.kamon" %% "kamon-prometheus"      % "1.0.0"
+lazy val kamonJaeger     = "io.kamon" %% "kamon-jaeger"          % "1.0.1"
+lazy val kamonMetrics    = "io.kamon" %% "kamon-system-metrics"  % "1.0.0"
+lazy val kamonAkka       = "io.kamon" %% "kamon-akka-2.5"        % "1.0.1"
+lazy val kamonAkkaHttp   = "io.kamon" %% "kamon-akka-http-2.5"   % "1.1.0"
+lazy val kamonAkkaRemote = "io.kamon" %% "kamon-akka-remote-2.5" % "1.0.0"
 
 lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
 
