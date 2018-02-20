@@ -45,7 +45,7 @@ lazy val commonsTest        = "ch.epfl.bluebrain.nexus" %% "commons-test"       
 lazy val journal            = "io.verizon.journal"      %% "core"                 % journalVersion
 lazy val scalaTest          = "org.scalatest"           %% "scalatest"            % scalaTestVersion
 
-lazy val serviceHttp = project
+lazy val http = project
   .in(file("modules/http"))
   .settings(
     name       := "service-http",
@@ -72,7 +72,7 @@ lazy val root = project
     name       := "service",
     moduleName := "service",
   )
-  .aggregate(serviceHttp)
+  .aggregate(http)
 
 /* ********************************************************
  ******************** Grouped Settings ********************

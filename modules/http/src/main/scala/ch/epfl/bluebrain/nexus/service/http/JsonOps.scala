@@ -39,7 +39,7 @@ object JsonOps {
         json.arrayOrObject[Json](json, arr => Json.fromValues(arr.map(canonicalJson)), obj => sorted(obj).asJson)
 
       def sorted(jObj: JsonObject): JsonObject =
-        JsonObject.fromIterable(jObj.toVector.sortBy(_._1).map { case (k, v) => k -> canonicalJson(v) })
+        JsonObject.fromIterable(jObj.toVector.sortBy { case (k, _) => k }.map { case (k, v) => k -> canonicalJson(v) })
 
       canonicalJson(json)
     }
