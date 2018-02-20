@@ -11,7 +11,7 @@ pipeline {
                     steps {
                         node("slave-sbt") {
                             checkout scm
-                            //sh 'sbt clean scalafmtSbtCheck scapegoat'
+                            sh 'sbt clean scalafmtSbtCheck scapegoat'
                         }
                     }
                 }
@@ -19,7 +19,7 @@ pipeline {
                     steps {
                         node("slave-sbt") {
                             checkout scm
-                            //sh 'sbt clean coverage test coverageReport coverageAggregate'
+                            sh 'sbt clean coverage test coverageReport coverageAggregate'
                         }
                     }
                 }
@@ -32,7 +32,7 @@ pipeline {
             steps {
                 node("slave-sbt") {
                     checkout scm
-                    //sh 'sbt releaseEarly'
+                    sh 'sbt releaseEarly'
                 }
             }
         }
