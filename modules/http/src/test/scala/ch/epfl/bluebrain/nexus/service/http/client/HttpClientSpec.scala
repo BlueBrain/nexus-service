@@ -26,19 +26,23 @@ class HttpClientSpec extends TestKit(ActorSystem("HttpClientSpec")) with WordSpe
 
     "discard entity when expected HTTP codes in HttpResponse" in {
       val count = new AtomicLong(0L)
-      Future(HttpResponse(OK)).discardOnCodesOr(Set(OK)) { _ =>
-        val _ = count.incrementAndGet()
-        Future.successful(())
-      }.futureValue shouldEqual (())
+      Future(HttpResponse(OK))
+        .discardOnCodesOr(Set(OK)) { _ =>
+          val _ = count.incrementAndGet()
+          Future.successful(())
+        }
+        .futureValue shouldEqual (())
       count.get() shouldEqual 0L
     }
 
     "execute else block when not unexpected HTTP codes in HttpResponse" in {
       val count = new AtomicLong(0L)
-      Future(HttpResponse(NotFound)).discardOnCodesOr(Set(OK)) { _ =>
-        val _ = count.incrementAndGet()
-        Future.successful(())
-      }.futureValue shouldEqual (())
+      Future(HttpResponse(NotFound))
+        .discardOnCodesOr(Set(OK)) { _ =>
+          val _ = count.incrementAndGet()
+          Future.successful(())
+        }
+        .futureValue shouldEqual (())
       count.get() shouldEqual 1L
     }
   }

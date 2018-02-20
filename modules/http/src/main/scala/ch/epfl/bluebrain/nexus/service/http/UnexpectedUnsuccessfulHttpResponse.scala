@@ -11,6 +11,6 @@ import akka.http.scaladsl.model.HttpResponse
 final case class UnexpectedUnsuccessfulHttpResponse(response: HttpResponse) extends Exception {
   override def fillInStackTrace(): UnexpectedUnsuccessfulHttpResponse = this
   // $COVERAGE-OFF$
-  override val getMessage: String                                     = "Received an unexpected http response while communicating with an external service"
+  override val getMessage: String = "Received an unexpected http response while communicating with an external service"
   // $COVERAGE-ON$
 }
