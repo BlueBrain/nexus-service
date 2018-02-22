@@ -126,8 +126,8 @@ lazy val serialization = project
       circeCore,
       circeParser,
       shapeless,
-      circeGenericExtras      % Test,
-      scalaTest               % Test
+      circeGenericExtras % Test,
+      scalaTest          % Test
     )
   )
 
