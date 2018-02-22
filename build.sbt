@@ -24,25 +24,44 @@ scalafmt: {
 }
  */
 
-val akkaVersion          = "2.5.9"
-val akkaHttpVersion      = "10.0.11"
-val akkaHttpCirceVersion = "1.19.0"
-val catsVersion          = "1.0.1"
-val circeVersion         = "0.9.1"
-val commonsVersion       = "0.7.6"
-val journalVersion       = "3.0.19"
-val scalaTestVersion     = "3.0.5"
+val akkaVersion                     = "2.5.9"
+val akkaHttpVersion                 = "10.0.11"
+val akkaHttpCirceVersion            = "1.19.0"
+val akkaPersistenceInMemVersion     = "2.5.1.1"
+val akkaPersistenceCassandraVersion = "0.83"
+val catsVersion                     = "1.0.1"
+val circeVersion                    = "0.9.1"
+val commonsVersion                  = "0.7.6"
+val journalVersion                  = "3.0.19"
+val monixVersion                    = "2.3.3"
+val scalaTestVersion                = "3.0.5"
+val shapelessVersion                = "2.3.3"
+val sourcingVersion                 = "0.10.1"
 
-lazy val akkaTestKit        = "com.typesafe.akka"       %% "akka-testkit"         % akkaVersion
-lazy val akkaHttp           = "com.typesafe.akka"       %% "akka-http"            % akkaHttpVersion
-lazy val akkaHttpTestKit    = "com.typesafe.akka"       %% "akka-http-testkit"    % akkaHttpVersion
+lazy val akkaActor           = "com.typesafe.akka" %% "akka-actor"            % akkaVersion
+lazy val akkaClusterSharding = "com.typesafe.akka" %% "akka-cluster-sharding" % akkaVersion
+lazy val akkaTestKit         = "com.typesafe.akka" %% "akka-testkit"          % akkaVersion
+lazy val akkaHttp            = "com.typesafe.akka" %% "akka-http"             % akkaHttpVersion
+lazy val akkaHttpTestKit     = "com.typesafe.akka" %% "akka-http-testkit"     % akkaHttpVersion
+lazy val akkaStream          = "com.typesafe.akka" %% "akka-stream"           % akkaVersion
+
+lazy val akkaPersistence          = "com.typesafe.akka"   %% "akka-persistence"                    % akkaVersion
+lazy val akkaPersistenceQuery     = "com.typesafe.akka"   %% "akka-persistence-query"              % akkaVersion
+lazy val akkaPersistenceCassandra = "com.typesafe.akka"   %% "akka-persistence-cassandra"          % akkaPersistenceCassandraVersion
+lazy val akkaPersistenceInMem     = "com.github.dnvriend" %% "akka-persistence-inmemory"           % akkaPersistenceInMemVersion
+lazy val akkaPersistenceLauncher  = "com.typesafe.akka"   %% "akka-persistence-cassandra-launcher" % akkaPersistenceCassandraVersion
+
 lazy val akkaHttpCirce      = "de.heikoseeberger"       %% "akka-http-circe"      % akkaHttpCirceVersion
-lazy val catsCore           = "org.typelevel"           %% "cats-core"            % catsVersion
 lazy val circeCore          = "io.circe"                %% "circe-core"           % circeVersion
 lazy val circeParser        = "io.circe"                %% "circe-parser"         % circeVersion
 lazy val circeGenericExtras = "io.circe"                %% "circe-generic-extras" % circeVersion
+lazy val catsCore           = "org.typelevel"           %% "cats-core"            % catsVersion
 lazy val commonsTest        = "ch.epfl.bluebrain.nexus" %% "commons-test"         % commonsVersion
+lazy val commonsTypes       = "ch.epfl.bluebrain.nexus" %% "commons-types"        % commonsVersion
 lazy val journal            = "io.verizon.journal"      %% "core"                 % journalVersion
+lazy val monixEval          = "io.monix"                %% "monix-eval"           % monixVersion
+lazy val shapeless          = "com.chuusai"             %% "shapeless"            % shapelessVersion
+lazy val sourcingAkka       = "ch.epfl.bluebrain.nexus" %% "sourcing-akka"        % sourcingVersion
 
 lazy val kamonCore       = "io.kamon" %% "kamon-core"            % "1.0.1"
 lazy val kamonPrometheus = "io.kamon" %% "kamon-prometheus"      % "1.0.0"
@@ -74,6 +93,29 @@ lazy val http = project
     )
   )
 
+lazy val indexing = project
+  .in(file("modules/indexing"))
+  .settings(
+    name       := "service-indexing",
+    moduleName := "service-indexing",
+    libraryDependencies ++= Seq(
+      akkaActor,
+      akkaPersistenceCassandra,
+      circeCore,
+      circeParser,
+      commonsTypes,
+      monixEval,
+      journal,
+      shapeless,
+      akkaPersistenceLauncher % Test,
+      akkaTestKit             % Test,
+      akkaHttpTestKit         % Test,
+      circeGenericExtras      % Test,
+      scalaTest               % Test,
+      sourcingAkka            % Test
+    )
+  )
+
 lazy val kamon = project
   .in(file("modules/kamon"))
   .settings(
@@ -89,7 +131,7 @@ lazy val root = project
     name       := "service",
     moduleName := "service",
   )
-  .aggregate(http, kamon)
+  .aggregate(http, indexing, kamon)
 
 /* ********************************************************
  ******************** Grouped Settings ********************
