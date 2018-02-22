@@ -116,6 +116,21 @@ lazy val indexing = project
     )
   )
 
+lazy val serialization = project
+  .in(file("modules/serialization"))
+  .settings(
+    name       := "service-serialization",
+    moduleName := "service-serialization",
+    libraryDependencies ++= Seq(
+      akkaActor,
+      circeCore,
+      circeParser,
+      shapeless,
+      circeGenericExtras % Test,
+      scalaTest          % Test
+    )
+  )
+
 lazy val kamon = project
   .in(file("modules/kamon"))
   .settings(
@@ -131,7 +146,7 @@ lazy val root = project
     name       := "service",
     moduleName := "service",
   )
-  .aggregate(http, indexing, kamon)
+  .aggregate(http, indexing, serialization, kamon)
 
 /* ********************************************************
  ******************** Grouped Settings ********************
