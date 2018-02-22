@@ -40,7 +40,6 @@ val sourcingVersion                 = "0.10.1"
 
 lazy val akkaActor           = "com.typesafe.akka" %% "akka-actor"            % akkaVersion
 lazy val akkaClusterSharding = "com.typesafe.akka" %% "akka-cluster-sharding" % akkaVersion
-lazy val akkaDistributedData = "com.typesafe.akka" %% "akka-distributed-data" % akkaVersion
 lazy val akkaTestKit         = "com.typesafe.akka" %% "akka-testkit"          % akkaVersion
 lazy val akkaHttp            = "com.typesafe.akka" %% "akka-http"             % akkaHttpVersion
 lazy val akkaHttpTestKit     = "com.typesafe.akka" %% "akka-http-testkit"     % akkaHttpVersion
@@ -94,15 +93,13 @@ lazy val http = project
     )
   )
 
-lazy val indexer = project
-  .in(file("modules/indexer"))
+lazy val indexing = project
+  .in(file("modules/indexing"))
   .settings(
-    name       := "service-indexer",
-    moduleName := "service-indexer",
+    name       := "service-indexing",
+    moduleName := "service-indexing",
     libraryDependencies ++= Seq(
       akkaActor,
-      akkaDistributedData,
-      akkaHttp,
       akkaPersistenceCassandra,
       circeCore,
       circeParser,
@@ -134,7 +131,7 @@ lazy val root = project
     name       := "service",
     moduleName := "service",
   )
-  .aggregate(http, indexer, kamon)
+  .aggregate(http, indexing, kamon)
 
 /* ********************************************************
  ******************** Grouped Settings ********************
