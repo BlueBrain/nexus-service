@@ -1,13 +1,13 @@
-package ch.epfl.bluebrain.nexus.service.http
+package ch.epfl.bluebrain.nexus.service.http.directives
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.marshalling.Marshal
 import akka.http.scaladsl.model.{HttpEntity, HttpResponse, StatusCodes, Uri}
 import akka.testkit.TestKit
 import akka.util.ByteString
-import ch.epfl.bluebrain.nexus.service.http.ErrorDirectivesSpec.CustomError
+import ch.epfl.bluebrain.nexus.commons.http.{ContextUri, RdfMediaTypes}
 import ch.epfl.bluebrain.nexus.service.http.directives.ErrorDirectives._
-import ch.epfl.bluebrain.nexus.service.http.directives.StatusFrom
+import ch.epfl.bluebrain.nexus.service.http.directives.ErrorDirectivesSpec.CustomError
 import io.circe.generic.auto._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{Matchers, WordSpecLike}

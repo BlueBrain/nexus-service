@@ -24,14 +24,14 @@ scalafmt: {
 }
  */
 
-val akkaVersion                     = "2.5.9"
+val akkaVersion                     = "2.5.10"
 val akkaHttpVersion                 = "10.0.11"
 val akkaHttpCirceVersion            = "1.19.0"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
 val akkaPersistenceCassandraVersion = "0.83"
 val catsVersion                     = "1.0.1"
 val circeVersion                    = "0.9.1"
-val commonsVersion                  = "0.7.6"
+val commonsVersion                  = "0.7.7"
 val journalVersion                  = "3.0.19"
 val monixVersion                    = "2.3.3"
 val scalaTestVersion                = "3.0.5"
@@ -56,8 +56,8 @@ lazy val circeCore          = "io.circe"                %% "circe-core"         
 lazy val circeParser        = "io.circe"                %% "circe-parser"         % circeVersion
 lazy val circeGenericExtras = "io.circe"                %% "circe-generic-extras" % circeVersion
 lazy val catsCore           = "org.typelevel"           %% "cats-core"            % catsVersion
-lazy val commonsTest        = "ch.epfl.bluebrain.nexus" %% "commons-test"         % commonsVersion
 lazy val commonsTypes       = "ch.epfl.bluebrain.nexus" %% "commons-types"        % commonsVersion
+lazy val commonsHttp        = "ch.epfl.bluebrain.nexus" %% "commons-http"         % commonsVersion
 lazy val journal            = "io.verizon.journal"      %% "core"                 % journalVersion
 lazy val monixEval          = "io.monix"                %% "monix-eval"           % monixVersion
 lazy val shapeless          = "com.chuusai"             %% "shapeless"            % shapelessVersion
@@ -79,16 +79,12 @@ lazy val http = project
     name       := "service-http",
     moduleName := "service-http",
     libraryDependencies ++= Seq(
-      akkaHttp,
       akkaHttpCirce,
-      catsCore,
       circeCore,
-      circeParser,
-      journal,
+      commonsHttp,
       akkaTestKit        % Test,
       akkaHttpTestKit    % Test,
       circeGenericExtras % Test,
-      commonsTest        % Test,
       scalaTest          % Test
     )
   )
