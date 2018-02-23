@@ -2,8 +2,8 @@ package ch.epfl.bluebrain.nexus.service.http.directives
 
 import akka.http.scaladsl.marshalling.{Marshaller, ToResponseMarshaller}
 import akka.http.scaladsl.model._
-import ch.epfl.bluebrain.nexus.service.http.{ContextUri, RdfMediaTypes}
-import ch.epfl.bluebrain.nexus.service.http.JsonOps._
+import ch.epfl.bluebrain.nexus.commons.http.JsonOps._
+import ch.epfl.bluebrain.nexus.commons.http.{ContextUri, RdfMediaTypes}
 import io.circe.Encoder
 
 /**
