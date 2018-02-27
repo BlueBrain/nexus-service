@@ -31,12 +31,12 @@ val akkaPersistenceInMemVersion     = "2.5.1.1"
 val akkaPersistenceCassandraVersion = "0.83"
 val catsVersion                     = "1.0.1"
 val circeVersion                    = "0.9.1"
-val commonsVersion                  = "0.7.7"
+val commonsVersion                  = "0.10.2"
 val journalVersion                  = "3.0.19"
 val monixVersion                    = "2.3.3"
 val scalaTestVersion                = "3.0.5"
 val shapelessVersion                = "2.3.3"
-val sourcingVersion                 = "0.10.1"
+val sourcingVersion                 = "0.10.2"
 
 lazy val akkaActor           = "com.typesafe.akka" %% "akka-actor"            % akkaVersion
 lazy val akkaClusterSharding = "com.typesafe.akka" %% "akka-cluster-sharding" % akkaVersion
@@ -136,7 +136,7 @@ lazy val kamon = project
     libraryDependencies ++= Seq(kamonCore,
                                 kamonPrometheus,
                                 kamonJaeger,
-                                kamonLogback % Runtime,
+                                kamonLogback,
                                 kamonMetrics,
                                 kamonAkka % Runtime,
                                 kamonAkkaHttp,
