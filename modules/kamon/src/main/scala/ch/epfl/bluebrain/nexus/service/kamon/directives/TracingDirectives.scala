@@ -14,24 +14,24 @@ import kamon.akka.http.KamonTraceDirectives.operationName
   */
 class TracingDirectives(config: TracingConfig = TracingConfig.default) {
 
-  private def validPayloadTracingCandidate(entity: HttpEntity.Strict): Boolean =
-    config.payloadMediaTypes.contains(entity.contentType.mediaType) && entity.contentLength < config.maxContentLength
+  private def validTracingCandidate(entity: HttpEntity.Strict): Boolean =
+    config.mediaTypes.contains(entity.contentType.mediaType) && entity.contentLength < config.maxContentLength
 
   private def tagEntry(ct: ContentType, data: ByteString): (String, String) =
-    config.payloadTagName -> data.decodeString(ct.charsetOption.getOrElse(HttpCharsets.`UTF-8`).value)
+    config.tagName -> data.decodeString(ct.charsetOption.getOrElse(HttpCharsets.`UTF-8`).value)
 
   /**
     * Configures the current span with the arguments.
     *
-    * @param name           the operation name of the span
-    * @param tags           the collection of tags to add to the span
-    * @param includePayload whether to attempt include the payload as a tag
+    * @param name                 the operation name of the span
+    * @param tags                 the collection of tags to add to the span
+    * @param includeRequestEntity whether to attempt include the request entity as a tag
     */
-  def trace(name: String, tags: Map[String, String] = Map.empty, includePayload: Boolean = true): Directive0 = {
-    if (!includePayload) operationName(name, tags)
+  def trace(name: String, tags: Map[String, String] = Map.empty, includeRequestEntity: Boolean = true): Directive0 = {
+    if (!includeRequestEntity) operationName(name, tags)
     else
       extractRequestEntity.flatMap {
-        case entity @ HttpEntity.Strict(ct, data) if validPayloadTracingCandidate(entity) =>
+        case entity @ HttpEntity.Strict(ct, data) if validTracingCandidate(entity) =>
           operationName(name, tags + tagEntry(ct, data))
         case _ => operationName(name, tags)
       }
@@ -62,5 +62,6 @@ object TracingDirectives {
       .fold[TracingConfig](e => throw e, identity)
     apply(config)
   }
+
   // $COVERAGE-ON$
 }

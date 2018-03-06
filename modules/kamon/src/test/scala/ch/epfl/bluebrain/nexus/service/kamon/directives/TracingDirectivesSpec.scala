@@ -15,11 +15,11 @@ import kamon.trace.Span
 import kamon.trace.Span.TagValue
 import kamon.util.Registration
 import kamon.{Kamon, SpanReporter}
-import org.scalatest.concurrent.Eventually
 import org.scalatest._
+import org.scalatest.concurrent.Eventually
 
 class TracingDirectivesSpec
-  extends WordSpecLike
+    extends WordSpecLike
     with Matchers
     with Eventually
     with ScalatestRouteTest
@@ -43,50 +43,50 @@ class TracingDirectivesSpec
   }
 
   "The TracingDirectives" should {
-    "add a span tag with the payload" when {
+    "add a span tag with the request entity" when {
       "matches all filtering criteria" in {
         Post("/", HttpEntity(ContentTypes.`application/json`, "{}")) ~> route() ~> check {
           status shouldEqual StatusCodes.OK
         }
-        eventualSpan.tags.get("payload").value shouldEqual TagValue.String("{}")
+        eventualSpan.tags.get("http.request.entity").value shouldEqual TagValue.String("{}")
       }
     }
-    "not add a span tag with the payload" when {
+    "not add a span tag with the request entity" when {
       "the content type does not match an expected value" in {
         Post("/", HttpEntity(ContentTypes.`text/plain(UTF-8)`, "{}")) ~> route() ~> check {
           status shouldEqual StatusCodes.OK
         }
-        eventualSpan.tags.keys should not contain "payload"
+        eventualSpan.tags.keys should not contain "http.request.entity"
       }
 
       "the content length is higher than the allowed value" in {
         Post("/", HttpEntity(ContentTypes.`application/json`, "123456")) ~> route() ~> check {
           status shouldEqual StatusCodes.OK
         }
-        eventualSpan.tags.keys should not contain "payload"
+        eventualSpan.tags.keys should not contain "http.request.entity"
       }
 
       "the request does not contain a http entity" in {
         Post("/") ~> route() ~> check {
           status shouldEqual StatusCodes.OK
         }
-        eventualSpan.tags.keys should not contain "payload"
+        eventualSpan.tags.keys should not contain "http.request.entity"
       }
 
-      "the include payload is set to false" in {
-        Post("/", HttpEntity(ContentTypes.`application/json`, "{}")) ~> route(includePayload = false) ~> check {
+      "the include request entity is set to false" in {
+        Post("/", HttpEntity(ContentTypes.`application/json`, "{}")) ~> route(includeRequestEntity = false) ~> check {
           status shouldEqual StatusCodes.OK
         }
-        eventualSpan.tags.keys should not contain "payload"
+        eventualSpan.tags.keys should not contain "http.request.entity"
       }
     }
   }
 
-  def route(includePayload: Boolean = true): Route = wrap {
+  def route(includeRequestEntity: Boolean = true): Route = wrap {
     val tracingDirectives = TracingDirectives()
     import tracingDirectives._
     pathEndOrSingleSlash {
-      trace("my-trace", includePayload = includePayload) {
+      trace("my-trace", includeRequestEntity = includeRequestEntity) {
         post {
           Kamon.currentSpan().finish()
           complete("")
@@ -99,7 +99,8 @@ class TracingDirectivesSpec
     Route.seal(
       extractRequest { request =>
         val parentContext = Context.create()
-        val span = Kamon.buildSpan(serverOperationName(request))
+        val span = Kamon
+          .buildSpan(serverOperationName(request))
           .asChildOf(parentContext.get(Span.ContextKey))
           .withMetricTag("span.kind", "server")
           .withTag("component", "akka.http.server")
@@ -132,7 +133,9 @@ class TracingDirectivesSpec
 object TracingDirectivesSpec {
 
   class TestSpanReporter extends SpanReporter {
+
     import scala.collection.JavaConverters._
+
     private val spans = new ConcurrentLinkedDeque[Span.FinishedSpan]()
 
     def clear(): Unit =
@@ -147,7 +150,10 @@ object TracingDirectivesSpec {
     }
 
     override def start(): Unit = ()
+
     override def stop(): Unit = ()
+
     override def reconfigure(config: Config): Unit = ()
   }
+
 }

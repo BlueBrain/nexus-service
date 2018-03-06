@@ -7,13 +7,12 @@ class TracingConfigSpec extends WordSpecLike with Matchers with EitherValues {
 
   "A TracingConfig" should {
     "present appropriate defaults" in {
-      val config = ConfigFactory.parseString(
-        """
+      val config = ConfigFactory.parseString("""
           |kamon.trace {
-          |  payload {
+          |  request-entity {
           |      max-content-length = 20480 // 20 KB
-          |      payload-tag-name = "payload"
-          |      payload-media-types = [
+          |      tag-name = "http.request.entity"
+          |      media-types = [
           |        "application/json",
           |        "application/ld+json"
           |      ]
@@ -23,13 +22,12 @@ class TracingConfigSpec extends WordSpecLike with Matchers with EitherValues {
       TracingConfig.default shouldEqual TracingConfig.fromConfig(config).right.value
     }
     "be constructed correctly from config" in {
-      val config = ConfigFactory.parseString(
-        """
+      val config = ConfigFactory.parseString("""
           |kamon.trace {
-          |  payload {
+          |  request-entity {
           |      max-content-length = 20480 // 20 KB
-          |      payload-tag-name = "payload"
-          |      payload-media-types = [
+          |      tag-name = "http.request.entity"
+          |      media-types = [
           |        "application/json",
           |        "application/ld+json"
           |      ]
@@ -40,13 +38,12 @@ class TracingConfigSpec extends WordSpecLike with Matchers with EitherValues {
     }
     "fail to construct from config" when {
       "using an illegal 'max-content-length'" in {
-        val config = ConfigFactory.parseString(
-          """
+        val config = ConfigFactory.parseString("""
             |kamon.trace {
-            |  payload {
+            |  request-entity {
             |      max-content-length = "asd"
-            |      payload-tag-name = "payload"
-            |      payload-media-types = [
+            |      tag-name = "http.request.entity"
+            |      media-types = [
             |        "application/json",
             |        "application/ld+json"
             |      ]
@@ -55,14 +52,13 @@ class TracingConfigSpec extends WordSpecLike with Matchers with EitherValues {
           """.stripMargin)
         TracingConfig.fromConfig(config).left.value
       }
-      "using an illegal 'payload-tag-name'" in {
-        val config = ConfigFactory.parseString(
-          """
+      "using an illegal 'tag-name'" in {
+        val config = ConfigFactory.parseString("""
             |kamon.trace {
-            |  payload {
+            |  request-entity {
             |      max-content-length = 3
-            |      payload-tag-name = []
-            |      payload-media-types = [
+            |      tag-name = []
+            |      media-types = [
             |        "application/json",
             |        "application/ld+json"
             |      ]
@@ -71,14 +67,13 @@ class TracingConfigSpec extends WordSpecLike with Matchers with EitherValues {
           """.stripMargin)
         TracingConfig.fromConfig(config).left.value
       }
-      "using an illegal 'payload-media-types'" in {
-        val config = ConfigFactory.parseString(
-          """
+      "using an illegal 'media-types'" in {
+        val config = ConfigFactory.parseString("""
             |kamon.trace {
-            |  payload {
+            |  request-entity {
             |      max-content-length = 3
-            |      payload-tag-name = "payload"
-            |      payload-media-types = [
+            |      tag-name = "http.request.entity"
+            |      media-types = [
             |        "application/json 123",
             |        "application/ld+json"
             |      ]
