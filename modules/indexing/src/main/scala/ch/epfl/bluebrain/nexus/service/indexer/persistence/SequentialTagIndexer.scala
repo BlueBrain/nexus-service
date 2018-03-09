@@ -64,7 +64,7 @@ object SequentialTagIndexer {
         }
         .via(index)
         .mapAsync(1) { offset =>
-          log.debug(s"Storing latest offset '$offset'")
+          log.debug("Storing latest offset '{}'", offset)
           projection.storeLatestOffset(offset)
         }
   }
