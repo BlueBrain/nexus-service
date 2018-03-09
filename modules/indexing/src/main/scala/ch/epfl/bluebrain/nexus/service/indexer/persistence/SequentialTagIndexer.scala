@@ -64,7 +64,8 @@ object SequentialTagIndexer {
         }
         .via(index)
         .mapAsync(1) { offset =>
-          println(s"Offset $offset"); projection.storeLatestOffset(offset)
+          log.debug(s"Storing latest offset '$offset'")
+          projection.storeLatestOffset(offset)
         }
   }
   private def lookupRetriesConfig(implicit as: ActorSystem): (Int, RetryStrategy) = {
