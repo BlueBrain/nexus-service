@@ -133,14 +133,18 @@ lazy val kamon = project
   .settings(
     name       := "service-kamon",
     moduleName := "service-kamon",
-    libraryDependencies ++= Seq(kamonCore,
-                                kamonPrometheus,
-                                kamonJaeger,
-                                kamonLogback,
-                                kamonMetrics,
-                                kamonAkka % Runtime,
-                                kamonAkkaHttp,
-                                kamonAkkaRemote % Runtime)
+    libraryDependencies ++= Seq(
+      kamonCore,
+      kamonPrometheus,
+      kamonJaeger,
+      kamonLogback,
+      kamonMetrics,
+      kamonAkka % Runtime,
+      kamonAkkaHttp,
+      kamonAkkaRemote % Runtime,
+      akkaHttpTestKit % Test,
+      scalaTest       % Test
+    )
   )
 
 lazy val root = project

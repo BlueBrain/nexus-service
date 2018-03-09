@@ -46,8 +46,10 @@ class SingletonStreamCoordinator[A: Typeable, E](init: () => Future[A], source: 
     case Start(any) =>
       A.cast(any) match {
         case Some(a) =>
-          log.info("Received initial start value of type '{}', with value '{}' running the indexing function across the element stream",
-                   A.describe, a)
+          log.info(
+            "Received initial start value of type '{}', with value '{}' running the indexing function across the element stream",
+            A.describe,
+            a)
           val (killSwitch, doneFuture) = buildStream(a).run()
           doneFuture pipeTo self
           context.become(running(killSwitch))
