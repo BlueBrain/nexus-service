@@ -9,8 +9,8 @@ import akka.stream.ActorMaterializer
 import akka.testkit.{TestActorRef, TestKit, TestKitBase}
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.Fixture.{RetryExecuted, _}
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.SequentialTagIndexerSpec._
-import ch.epfl.bluebrain.nexus.service.indexer.stream.SingletonStreamCoordinator
-import ch.epfl.bluebrain.nexus.service.indexer.stream.SingletonStreamCoordinator.Stop
+import ch.epfl.bluebrain.nexus.service.indexer.stream.StreamCoordinator
+import ch.epfl.bluebrain.nexus.service.indexer.stream.StreamCoordinator.Stop
 import ch.epfl.bluebrain.nexus.commons.types.{Err, RetriableErr}
 import ch.epfl.bluebrain.nexus.sourcing.akka.{ShardingAggregate, SourcingAkkaSettings}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
@@ -73,7 +73,7 @@ class SequentialTagIndexerSpec
 
       val initialize = SequentialTagIndexer.initialize(initFunction(init), projId)
       val source     = SequentialTagIndexer.source(index, projId, pluginId, "executed")
-      val indexer    = TestActorRef(new SingletonStreamCoordinator(initialize, source))
+      val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
 
       eventually {
         count.get() shouldEqual 1L
@@ -104,7 +104,7 @@ class SequentialTagIndexerSpec
 
       val initialize = SequentialTagIndexer.initialize(initFunction(init), projId)
       val source     = SequentialTagIndexer.source(index, projId, pluginId, "other")
-      val indexer    = TestActorRef(new SingletonStreamCoordinator(initialize, source))
+      val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
 
       eventually {
         count.get() shouldEqual 2L
@@ -130,7 +130,7 @@ class SequentialTagIndexerSpec
 
       val initialize = SequentialTagIndexer.initialize(initFunction(init), projId)
       val source     = SequentialTagIndexer.source(index, projId, pluginId, "another")
-      val indexer    = TestActorRef(new SingletonStreamCoordinator(initialize, source))
+      val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
 
       eventually {
         count.get() shouldEqual 1L
@@ -162,7 +162,7 @@ class SequentialTagIndexerSpec
 
       val initialize = SequentialTagIndexer.initialize(initFunction(init), projId)
       val source     = SequentialTagIndexer.source(index, projId, pluginId, "retry")
-      val indexer    = TestActorRef(new SingletonStreamCoordinator(initialize, source))
+      val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
 
       eventually {
         count.get() shouldEqual 4
@@ -193,7 +193,7 @@ class SequentialTagIndexerSpec
 
       val initialize = SequentialTagIndexer.initialize(initFunction(init), projId)
       val source     = SequentialTagIndexer.source(index, projId, pluginId, "ignore")
-      val indexer    = TestActorRef(new SingletonStreamCoordinator(initialize, source))
+      val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
 
       eventually {
         count.get() shouldEqual 1L
