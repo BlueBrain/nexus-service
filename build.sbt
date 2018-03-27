@@ -24,13 +24,13 @@ scalafmt: {
 }
  */
 
-val akkaVersion                     = "2.5.10"
-val akkaHttpVersion                 = "10.0.11"
-val akkaHttpCirceVersion            = "1.19.0"
+val akkaVersion                     = "2.5.11"
+val akkaHttpVersion                 = "10.0.13"
+val akkaHttpCirceVersion            = "1.20.0"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
 val akkaPersistenceCassandraVersion = "0.83"
 val catsVersion                     = "1.0.1"
-val circeVersion                    = "0.9.1"
+val circeVersion                    = "0.9.2"
 val commonsVersion                  = "0.10.8"
 val journalVersion                  = "3.0.19"
 val monixVersion                    = "2.3.3"
