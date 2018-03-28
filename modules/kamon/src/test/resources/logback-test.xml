@@ -21,13 +21,11 @@
         <appender-ref ref="STDOUT" />
     </root>
 
-    <logger name="ch.epfl.bluebrain.nexus.service.indexer" additivity="false" level="${LOG_LEVEL:-INFO}">
+    <logger name="ch.epfl.bluebrain.nexus.service.kamon.directives" additivity="false" level="${LOG_LEVEL:-INFO}">
         <appender-ref ref="TRACED" />
     </logger>
 
     <logger name="akka.remote" level="WARN" />
     <logger name="akka.cluster" level="WARN" />
-    <logger name="org.apache.cassandra" level="ERROR" />
-    <logger name="com.datastax.driver.core" level="WARN" />
 
 </configuration>

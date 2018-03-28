@@ -11,7 +11,7 @@ pipeline {
                     steps {
                         node("slave-sbt") {
                             checkout scm
-                            sh 'sbt clean scalafmtCheck scalafmtSbtCheck scapegoat'
+                            sh 'sbt clean scalafmtCheck test:scalafmtCheck scalafmtSbtCheck scapegoat'
                         }
                     }
                 }
@@ -19,7 +19,9 @@ pipeline {
                     steps {
                         node("slave-sbt") {
                             checkout scm
-                            sh 'sbt clean coverage test coverageReport coverageAggregate'
+                            sh "sbt clean coverage test coverageReport coverageAggregate"
+                            sh "curl -s https://codecov.io/bash >> ./coverage.sh"
+                            sh "bash ./coverage.sh -t `oc get secrets codecov-secret --template='{{.data.nexus_service}}' | base64 -d`"
                         }
                     }
                 }
@@ -33,6 +35,19 @@ pipeline {
                 node("slave-sbt") {
                     checkout scm
                     sh 'sbt releaseEarly'
+                }
+            }
+        }
+        stage("Report Coverage") {
+            when {
+                expression { env.CHANGE_ID == null }
+            }
+            steps {
+                node("slave-sbt") {
+                    checkout scm
+                    sh "sbt clean coverage test coverageReport coverageAggregate"
+                    sh "curl -s https://codecov.io/bash >> ./coverage.sh"
+                    sh "bash ./coverage.sh -t `oc get secrets codecov-secret --template='{{.data.nexus_service}}' | base64 -d`"
                 }
             }
         }
