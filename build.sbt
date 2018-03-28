@@ -44,6 +44,7 @@ lazy val akkaTestKit         = "com.typesafe.akka" %% "akka-testkit"          % 
 lazy val akkaHttp            = "com.typesafe.akka" %% "akka-http"             % akkaHttpVersion
 lazy val akkaHttpTestKit     = "com.typesafe.akka" %% "akka-http-testkit"     % akkaHttpVersion
 lazy val akkaStream          = "com.typesafe.akka" %% "akka-stream"           % akkaVersion
+lazy val akkaSlf4j           = "com.typesafe.akka" %% "akka-slf4j"            % akkaVersion
 
 lazy val akkaPersistence          = "com.typesafe.akka"   %% "akka-persistence"                    % akkaVersion
 lazy val akkaPersistenceQuery     = "com.typesafe.akka"   %% "akka-persistence-query"              % akkaVersion
@@ -107,6 +108,7 @@ lazy val indexing = project
       akkaPersistenceLauncher % Test,
       akkaTestKit             % Test,
       akkaHttpTestKit         % Test,
+      akkaSlf4j               % Test,
       circeGenericExtras      % Test,
       scalaTest               % Test,
       sourcingAkka            % Test
@@ -143,6 +145,7 @@ lazy val kamon = project
       kamonAkkaHttp,
       kamonAkkaRemote % Runtime,
       akkaHttpTestKit % Test,
+      akkaSlf4j       % Test,
       scalaTest       % Test
     )
   )
