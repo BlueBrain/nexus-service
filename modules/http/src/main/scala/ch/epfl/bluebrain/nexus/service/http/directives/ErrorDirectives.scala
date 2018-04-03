@@ -2,9 +2,10 @@ package ch.epfl.bluebrain.nexus.service.http.directives
 
 import akka.http.scaladsl.marshalling.{Marshaller, ToResponseMarshaller}
 import akka.http.scaladsl.model._
+import ch.epfl.bluebrain.nexus.commons.http.JsonLdCirceSupport.OrderedKeys
 import ch.epfl.bluebrain.nexus.commons.http.JsonOps._
 import ch.epfl.bluebrain.nexus.commons.http.{ContextUri, RdfMediaTypes}
-import io.circe.Encoder
+import io.circe.{Encoder, Printer}
 
 /**
   * Directive to marshall StatusFrom instances into HTTP responses.
@@ -20,17 +21,23 @@ object ErrorDirectives {
     * @param statusFrom the StatusFrom instance mapping the entity to an HTTP status
     * @param encoder the Circe encoder instance to convert the entity into JSON
     * @param context the context URI to be injected into the JSON-LD response body
+    * @param orderedKeys the order in which the keys in the JSON-LD are going to be sorted
+    * @param printer a pretty-printer for JSON values
     * @return a ''ToResponseMarshaller'' that will generate an appropriate JSON-LD response
     */
   final implicit def jsonLdMarshallerFromStatusAndEncoder[A](
       implicit
       statusFrom: StatusFrom[A],
       encoder: Encoder[A],
-      context: ContextUri
+      context: ContextUri,
+      orderedKeys: OrderedKeys = OrderedKeys(List("@context", "code", "message", "details", "")),
+      printer: Printer = Printer.noSpaces.copy(dropNullValues = true)
   ): ToResponseMarshaller[A] =
     Marshaller.withFixedContentType(RdfMediaTypes.`application/ld+json`) { value =>
-      HttpResponse(status = statusFrom(value),
-                   entity = HttpEntity(RdfMediaTypes.`application/ld+json`,
-                                       encoder.mapJson(_.addContext(context)).apply(value).noSpaces))
+      HttpResponse(
+        status = statusFrom(value),
+        entity = HttpEntity(RdfMediaTypes.`application/ld+json`,
+                            printer.pretty(encoder.mapJson(_.addContext(context)).apply(value).sortKeys))
+      )
     }
 }
