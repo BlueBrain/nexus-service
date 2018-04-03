@@ -29,7 +29,7 @@ class ErrorDirectivesSpec
 
     "marshall error JSON-LD" in {
       val error      = CustomError("some error")
-      val jsonString = s"""{"message":"${error.message}","@context":"${contextUri.context}"}"""
+      val jsonString = s"""{"@context":"${contextUri.context}","message":"${error.message}"}"""
       Marshal(error).to[HttpResponse].futureValue shouldEqual HttpResponse(
         status = StatusCodes.NotFound,
         entity = HttpEntity.Strict(RdfMediaTypes.`application/ld+json`, ByteString(jsonString, "UTF-8")))
