@@ -31,7 +31,7 @@ val akkaPersistenceInMemVersion     = "2.5.1.1"
 val akkaPersistenceCassandraVersion = "0.83"
 val catsVersion                     = "1.0.1"
 val circeVersion                    = "0.9.2"
-val commonsVersion                  = "0.10.8"
+val commonsVersion                  = "0.10.10"
 val journalVersion                  = "3.0.19"
 val monixVersion                    = "2.3.3"
 val scalaTestVersion                = "3.0.5"
@@ -81,12 +81,14 @@ lazy val http = project
     name       := "service-http",
     moduleName := "service-http",
     libraryDependencies ++= Seq(
+      akkaHttp,
       akkaHttpCirce,
       circeCore,
       commonsHttp,
       akkaTestKit        % Test,
       akkaHttpTestKit    % Test,
       circeGenericExtras % Test,
+      circeParser        % Test,
       scalaTest          % Test
     )
   )
