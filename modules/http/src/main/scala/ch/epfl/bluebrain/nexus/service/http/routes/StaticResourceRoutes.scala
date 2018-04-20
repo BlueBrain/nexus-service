@@ -12,6 +12,12 @@ import io.circe.parser.parse
 
 import scala.io.Source
 
+/**
+  * Routes that expose static resources provided on the classpath
+  * @param resourcePath path to the folder in classpath to expose
+  * @param prefix       prefix to prepend to the routes
+  * @param baseUri      base URI to use in IDs, will replace {{base}} in all the resources
+  */
 class StaticResourceRoutes(resourcePath: String, prefix: String, baseUri: Uri) {
 
   private def contentOf(file: File): String =
@@ -33,11 +39,10 @@ class StaticResourceRoutes(resourcePath: String, prefix: String, baseUri: Uri) {
         parse(contentOf(file, baseReplacement)).toOption.map { json =>
           file.getName.stripSuffix(".json") -> json
       }
-    } toMap
+    }.toMap
   }
 
   private lazy val resources: Map[String, Map[String, Json]] = {
-    baseUri.toString()
     val resourceFolder = new File(getClass.getResource(resourcePath).getPath)
     if (resourceFolder.exists && resourceFolder.isDirectory) {
       resourceFolder
@@ -46,7 +51,7 @@ class StaticResourceRoutes(resourcePath: String, prefix: String, baseUri: Uri) {
         .filter(_.isDirectory)
         .map { folder =>
           folder.getName -> folderContents(folder)
-      } toMap
+      }.toMap
     } else {
       Map()
     }
