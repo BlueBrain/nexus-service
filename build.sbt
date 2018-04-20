@@ -57,6 +57,7 @@ lazy val circeCore          = "io.circe"                %% "circe-core"         
 lazy val circeParser        = "io.circe"                %% "circe-parser"         % circeVersion
 lazy val circeGenericExtras = "io.circe"                %% "circe-generic-extras" % circeVersion
 lazy val catsCore           = "org.typelevel"           %% "cats-core"            % catsVersion
+lazy val commonsTest        = "ch.epfl.bluebrain.nexus" %% "commons-test"         % commonsVersion
 lazy val commonsTypes       = "ch.epfl.bluebrain.nexus" %% "commons-types"        % commonsVersion
 lazy val commonsHttp        = "ch.epfl.bluebrain.nexus" %% "commons-http"         % commonsVersion
 lazy val journal            = "io.verizon.journal"      %% "core"                 % journalVersion
@@ -84,8 +85,10 @@ lazy val http = project
       akkaHttp,
       akkaHttpCirce,
       circeCore,
+      circeParser,
       commonsHttp,
       akkaTestKit        % Test,
+      commonsTest        % Test,
       akkaHttpTestKit    % Test,
       circeGenericExtras % Test,
       circeParser        % Test,
