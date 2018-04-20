@@ -105,10 +105,11 @@ object Path {
     def inner(acc: Path, remaining: String): Path =
       if (remaining.length == 0) acc
       else {
-        val index = remaining.indexOf("/")
-        if (index == -1) acc / remaining
-        else if (index == 0) inner(acc, remaining.substring(1))
-        else inner(acc / remaining.substring(0, index), remaining.substring(index + 1, remaining.length))
+        remaining.indexOf("/") match {
+          case -1    => acc / remaining
+          case 0     => inner(acc, remaining.substring(1))
+          case index => inner(acc / remaining.substring(0, index), remaining.substring(index + 1, remaining.length))
+        }
       }
     inner(Empty, string)
   }
