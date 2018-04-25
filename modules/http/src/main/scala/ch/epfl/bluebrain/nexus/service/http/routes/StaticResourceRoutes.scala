@@ -38,8 +38,9 @@ class StaticResourceRoutes(resourcePath: String, prefix: String, baseUri: Uri) {
       .flatMap { file =>
         parse(contentOf(file, baseReplacement)).toOption.map { json =>
           file.getName.stripSuffix(".json") -> json
+        }
       }
-    }.toMap
+      .toMap
   }
 
   private lazy val resources: Map[String, Map[String, Json]] = {
@@ -51,7 +52,8 @@ class StaticResourceRoutes(resourcePath: String, prefix: String, baseUri: Uri) {
         .filter(_.isDirectory)
         .map { folder =>
           folder.getName -> folderContents(folder)
-      }.toMap
+        }
+        .toMap
     } else {
       Map()
     }
