@@ -18,18 +18,27 @@ class StaticResourceRoutesSpec
     with ScalatestRouteTest
     with Resources {
 
-  val baseUri = "http://nexus.example.com/static"
+  val baseUri = "http://nexus.example.com/v1"
 
-  val staticRoutes = new StaticResourceRoutes("/static-routes-test", "test", baseUri).routes
+  val staticRoutes = new StaticResourceRoutes(
+    Map(
+      "/contexts/context1" -> "/static-routes-test/contexts/context1.json",
+      "/contexts/context2" -> "/static-routes-test/contexts/context2.json",
+      "/schemas/schema1"   -> "/static-routes-test/schemas/schema1.json",
+      "/schemas/schema2"   -> "/static-routes-test/schemas/schema2.json"
+    ),
+    "test",
+    baseUri
+  ).routes
 
   val baseReplacement = Map(
     quote("{{base}}") -> baseUri
   )
   val files = Map(
-    "/test/contexts/context1" -> jsonContentOf("/static-routes-test/contexts/context1.json", baseReplacement),
-    "/test/contexts/context2" -> jsonContentOf("/static-routes-test/contexts/context2.json", baseReplacement),
-    "/test/schemas/schema1"   -> jsonContentOf("/static-routes-test/schemas/schema1.json", baseReplacement),
-    "/test/schemas/schema2"   -> jsonContentOf("/static-routes-test/schemas/schema2.json", baseReplacement)
+    "/v1/test/contexts/context1" -> jsonContentOf("/static-routes-test/contexts/context1.json", baseReplacement),
+    "/v1/test/contexts/context2" -> jsonContentOf("/static-routes-test/contexts/context2.json", baseReplacement),
+    "/v1/test/schemas/schema1"   -> jsonContentOf("/static-routes-test/schemas/schema1.json", baseReplacement),
+    "/v1/test/schemas/schema2"   -> jsonContentOf("/static-routes-test/schemas/schema2.json", baseReplacement)
   )
 
   "A StaticResourceRoutes" should {
@@ -47,8 +56,8 @@ class StaticResourceRoutesSpec
     }
 
     "return 404 when resource doesn't exist" in {
-      Get(s"/test/schemas/${UUID.randomUUID().toString}") ~> staticRoutes ~> check {
-        status shouldEqual StatusCodes.NotFound
+      Get(s"/v1/test/schemas/${UUID.randomUUID().toString}") ~> staticRoutes ~> check {
+        rejections shouldEqual Seq()
       }
     }
   }
