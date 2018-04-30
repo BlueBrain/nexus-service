@@ -2,7 +2,7 @@ package ch.epfl.bluebrain.nexus.service.http.routes
 
 import java.util.regex.Pattern.quote
 
-import akka.http.scaladsl.model.{StatusCodes, Uri}
+import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import ch.epfl.bluebrain.nexus.commons.http.JsonLdCirceSupport._
@@ -50,7 +50,7 @@ class StaticResourceRoutes(resourcePaths: Map[String, String], prefix: String, b
         extractUnmatchedPath { resourcePath =>
           resources.get(resourcePath.toString) match {
             case Some(json) => complete(json)
-            case None       => complete(StatusCodes.NotFound)
+            case None       => reject
           }
         }
       }

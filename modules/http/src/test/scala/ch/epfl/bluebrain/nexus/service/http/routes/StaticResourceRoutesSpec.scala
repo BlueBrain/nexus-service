@@ -57,7 +57,7 @@ class StaticResourceRoutesSpec
 
     "return 404 when resource doesn't exist" in {
       Get(s"/v1/test/schemas/${UUID.randomUUID().toString}") ~> staticRoutes ~> check {
-        status shouldEqual StatusCodes.NotFound
+        rejections shouldEqual Seq()
       }
     }
   }
