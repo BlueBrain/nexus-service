@@ -21,8 +21,12 @@ import scala.io.Source
   */
 class StaticResourceRoutes(resourcePaths: Map[String, String], prefix: String, baseUri: Uri) extends PrefixDirectives {
 
-  private def contentOf(file: String): String =
-    Source.fromInputStream(getClass.getResourceAsStream(file)).mkString
+  private def contentOf(file: String): String = {
+    val source   = Source.fromInputStream(getClass.getResourceAsStream(file))
+    val contents = source.mkString
+    source.close()
+    contents
+  }
 
   private def contentOf(file: String, replacements: Map[String, String]): String =
     replacements.foldLeft(contentOf(file)) {
