@@ -85,6 +85,46 @@ class SequentialTagIndexerSpec
       expectTerminated(indexer)
     }
 
+    "recover from temporary failures on init function" in {
+
+      val initCalled = new AtomicLong(0L)
+
+      def initFail(init: AtomicLong): () => Future[Unit] =
+        () => {
+          if (initCalled.compareAndSet(0L, 1L) || initCalled.compareAndSet(1L, 2L))
+            Future.failed(new RuntimeException)
+          else {
+            init.incrementAndGet()
+            Future.successful(())
+          }
+        }
+
+      val agg = ShardingAggregate("something", sourcingSettings)(Fixture.initial, Fixture.next, Fixture.eval)
+      agg.append("a", Fixture.YetAnotherExecuted).futureValue
+
+      val count = new AtomicLong(0L)
+      val init  = new AtomicLong(10L)
+      val index = (_: Event) =>
+        Future.successful[Unit] {
+          val _ = count.incrementAndGet()
+      }
+      val projId = UUID.randomUUID().toString
+
+      val initialize = SequentialTagIndexer.initialize(initFail(init), projId)
+      val source     = SequentialTagIndexer.source(index, projId, pluginId, "yetanother")
+      val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
+
+      eventually {
+        initCalled.get() shouldEqual 2L
+        init.get shouldEqual 11L
+        count.get() shouldEqual 1L
+      }
+
+      watch(indexer)
+      indexer ! Stop
+      expectTerminated(indexer)
+    }
+
     "select only the configured event types" in {
       val agg = ShardingAggregate("selected", sourcingSettings)(Fixture.initial, Fixture.next, Fixture.eval)
       agg.append("first", Fixture.Executed).futureValue
