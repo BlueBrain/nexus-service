@@ -99,8 +99,8 @@ class SequentialTagIndexerSpec
           }
         }
 
-      val agg = ShardingAggregate("agg", sourcingSettings)(Fixture.initial, Fixture.next, Fixture.eval)
-      agg.append("a", Fixture.AnotherExecuted).futureValue
+      val agg = ShardingAggregate("something", sourcingSettings)(Fixture.initial, Fixture.next, Fixture.eval)
+      agg.append("a", Fixture.YetAnotherExecuted).futureValue
 
       val count = new AtomicLong(0L)
       val init  = new AtomicLong(10L)
@@ -111,7 +111,7 @@ class SequentialTagIndexerSpec
       val projId = UUID.randomUUID().toString
 
       val initialize = SequentialTagIndexer.initialize(initFail(init), projId)
-      val source     = SequentialTagIndexer.source(index, projId, pluginId, "another")
+      val source     = SequentialTagIndexer.source(index, projId, pluginId, "yetanother")
       val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
 
       eventually {
