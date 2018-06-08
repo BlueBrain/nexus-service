@@ -91,7 +91,7 @@ class SequentialTagIndexerSpec
 
       def initFail(init: AtomicLong): () => Future[Unit] =
         () => {
-          if (initCalled.compareAndSet(0L, 1L))
+          if (initCalled.compareAndSet(0L, 1L) || initCalled.compareAndSet(1L, 2L))
             Future.failed(new RuntimeException)
           else {
             init.incrementAndGet()
@@ -115,7 +115,7 @@ class SequentialTagIndexerSpec
       val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
 
       eventually {
-        initCalled.get() shouldEqual 1L
+        initCalled.get() shouldEqual 2L
         init.get shouldEqual 11L
         count.get() shouldEqual 1L
       }
