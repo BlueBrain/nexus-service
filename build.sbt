@@ -24,14 +24,15 @@ scalafmt: {
 }
  */
 
-val akkaVersion                     = "2.5.11"
-val akkaHttpVersion                 = "10.0.13"
-val akkaHttpCirceVersion            = "1.20.0"
+val akkaVersion                     = "2.5.13"
+val akkaHttpVersion                 = "10.1.3"
+val akkaHttpCirceVersion            = "1.21.0"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
-val akkaPersistenceCassandraVersion = "0.83"
+val akkaPersistenceCassandraVersion = "0.85"
+val akkaStreamKafkaVersion          = "0.21.1"
 val catsVersion                     = "1.0.1"
-val circeVersion                    = "0.9.2"
-val commonsVersion                  = "0.10.10"
+val circeVersion                    = "0.9.3"
+val commonsVersion                  = "0.10.12"
 val journalVersion                  = "3.0.19"
 val monixVersion                    = "2.3.3"
 val scalaTestVersion                = "3.0.5"
@@ -45,6 +46,7 @@ lazy val akkaHttp            = "com.typesafe.akka" %% "akka-http"             % 
 lazy val akkaHttpTestKit     = "com.typesafe.akka" %% "akka-http-testkit"     % akkaHttpVersion
 lazy val akkaStream          = "com.typesafe.akka" %% "akka-stream"           % akkaVersion
 lazy val akkaSlf4j           = "com.typesafe.akka" %% "akka-slf4j"            % akkaVersion
+lazy val akkaStreamKafka     = "com.typesafe.akka" %% "akka-stream-kafka"     % akkaStreamKafkaVersion
 
 lazy val akkaPersistence          = "com.typesafe.akka"   %% "akka-persistence"                    % akkaVersion
 lazy val akkaPersistenceQuery     = "com.typesafe.akka"   %% "akka-persistence-query"              % akkaVersion
@@ -65,16 +67,17 @@ lazy val monixEval          = "io.monix"                %% "monix-eval"         
 lazy val shapeless          = "com.chuusai"             %% "shapeless"            % shapelessVersion
 lazy val sourcingAkka       = "ch.epfl.bluebrain.nexus" %% "sourcing-akka"        % sourcingVersion
 
-lazy val kamonCore       = "io.kamon" %% "kamon-core"            % "1.0.1"
-lazy val kamonPrometheus = "io.kamon" %% "kamon-prometheus"      % "1.0.0"
-lazy val kamonJaeger     = "io.kamon" %% "kamon-jaeger"          % "1.0.1"
+lazy val kamonCore       = "io.kamon" %% "kamon-core"            % "1.1.3"
+lazy val kamonPrometheus = "io.kamon" %% "kamon-prometheus"      % "1.1.1"
+lazy val kamonJaeger     = "io.kamon" %% "kamon-jaeger"          % "1.0.2"
 lazy val kamonLogback    = "io.kamon" %% "kamon-logback"         % "1.0.0"
 lazy val kamonMetrics    = "io.kamon" %% "kamon-system-metrics"  % "1.0.0"
 lazy val kamonAkka       = "io.kamon" %% "kamon-akka-2.5"        % "1.0.1"
 lazy val kamonAkkaHttp   = "io.kamon" %% "kamon-akka-http-2.5"   % "1.1.0"
-lazy val kamonAkkaRemote = "io.kamon" %% "kamon-akka-remote-2.5" % "1.0.0"
+lazy val kamonAkkaRemote = "io.kamon" %% "kamon-akka-remote-2.5" % "1.0.1"
 
-lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
+lazy val scalaTest     = "org.scalatest" %% "scalatest"                % scalaTestVersion
+lazy val embeddedKafka = "net.manub"     %% "scalatest-embedded-kafka" % "1.1.0-kafka1.1-nosr"
 
 lazy val http = project
   .in(file("modules/http"))
@@ -117,6 +120,25 @@ lazy val indexing = project
       circeGenericExtras      % Test,
       scalaTest               % Test,
       sourcingAkka            % Test
+    )
+  )
+
+lazy val queue = project
+  .in(file("modules/queue"))
+  .dependsOn(indexing)
+  .settings(
+    name       := "service-queue",
+    moduleName := "service-queue",
+    libraryDependencies ++= Seq(
+      akkaStream,
+      akkaStreamKafka,
+      circeCore,
+      circeParser,
+      journal,
+      shapeless,
+      akkaTestKit   % Test,
+      scalaTest     % Test,
+      embeddedKafka % Test
     )
   )
 
