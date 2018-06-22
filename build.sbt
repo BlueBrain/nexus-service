@@ -123,12 +123,12 @@ lazy val indexing = project
     )
   )
 
-lazy val queue = project
-  .in(file("modules/queue"))
+lazy val kafka = project
+  .in(file("modules/kafka"))
   .dependsOn(indexing)
   .settings(
-    name       := "service-queue",
-    moduleName := "service-queue",
+    name       := "service-kafka",
+    moduleName := "service-kafka",
     libraryDependencies ++= Seq(
       akkaStream,
       akkaStreamKafka,
@@ -184,7 +184,7 @@ lazy val root = project
     name       := "service",
     moduleName := "service"
   )
-  .aggregate(http, indexing, serialization, kamon)
+  .aggregate(http, indexing, kafka, serialization, kamon)
 
 /* ********************************************************
  ******************** Grouped Settings ********************

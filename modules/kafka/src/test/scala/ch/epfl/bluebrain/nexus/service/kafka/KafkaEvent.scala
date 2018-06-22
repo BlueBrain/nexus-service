@@ -1,6 +1,6 @@
-package ch.epfl.bluebrain.nexus.service.queue
+package ch.epfl.bluebrain.nexus.service.kafka
 
-import cats.Show
+import ch.epfl.bluebrain.nexus.service.kafka.key.Key
 import io.circe._
 import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.semiauto._
@@ -15,5 +15,5 @@ object KafkaEvent {
 
   implicit val eventEncoder: Encoder[KafkaEvent] = deriveEncoder[KafkaEvent]
 
-  implicit val show: Show[KafkaEvent] = Show.show(_._id)
+  implicit val key: Key[KafkaEvent] = Key.key(_._id)
 }

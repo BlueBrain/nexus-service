@@ -1,4 +1,4 @@
-package ch.epfl.bluebrain.nexus.service.queue
+package ch.epfl.bluebrain.nexus.service.kafka
 
 import java.util.concurrent.Future
 
@@ -9,9 +9,8 @@ import akka.kafka.ProducerSettings
 import akka.kafka.scaladsl.Producer
 import akka.persistence.query.Offset
 import akka.stream.scaladsl.Flow
-import cats.Show
-import cats.syntax.show._
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.SequentialTagIndexer
+import ch.epfl.bluebrain.nexus.service.kafka.key._
 import io.circe.Encoder
 import io.circe.syntax._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
@@ -25,7 +24,7 @@ import shapeless.Typeable
   * @param topic    the kafka topic
   * @tparam Event   the generic event type
   */
-class KafkaPublisher[Event: Encoder: Show](producer: KafkaProducer[String, String], topic: String) {
+class KafkaPublisher[Event: Encoder: Key](producer: KafkaProducer[String, String], topic: String) {
 
   /**
     * Manually sends a single message
@@ -34,19 +33,19 @@ class KafkaPublisher[Event: Encoder: Show](producer: KafkaProducer[String, Strin
     * @return the metadata for the record acknowledge by the server
     */
   def send(event: Event): Future[RecordMetadata] = {
-    val message = new ProducerRecord[String, String](topic, event.show, event.asJson.noSpaces)
+    val message = new ProducerRecord[String, String](topic, event.key, event.asJson.noSpaces)
     producer.send(message)
   }
 }
 
 object KafkaPublisher {
 
-  private def flow[Event: Encoder: Show](producerSettings: ProducerSettings[String, String],
-                                         topic: String): Flow[(Offset, String, Event), Offset, NotUsed] = {
+  private def flow[Event: Encoder: Key](producerSettings: ProducerSettings[String, String],
+                                        topic: String): Flow[(Offset, String, Event), Offset, NotUsed] = {
     Flow[(Offset, String, Event)]
       .map {
         case (off, _, event) =>
-          Message(new ProducerRecord[String, String](topic, event.show, event.asJson.noSpaces), off)
+          Message(new ProducerRecord[String, String](topic, event.key, event.asJson.noSpaces), off)
       }
       .via(Producer.flexiFlow(producerSettings))
       .map(_.passThrough)
@@ -66,12 +65,12 @@ object KafkaPublisher {
     * @tparam Event the generic event type
     * @return ActorRef for the started actor
     */
-  final def start[Event: Encoder: Show: Typeable](projectionId: String,
-                                                  pluginId: String,
-                                                  tag: String,
-                                                  name: String,
-                                                  producerSettings: ProducerSettings[String, String],
-                                                  topic: String)(implicit as: ActorSystem): ActorRef =
+  final def startTagStream[Event: Encoder: Key: Typeable](projectionId: String,
+                                                          pluginId: String,
+                                                          tag: String,
+                                                          name: String,
+                                                          producerSettings: ProducerSettings[String, String],
+                                                          topic: String)(implicit as: ActorSystem): ActorRef =
     SequentialTagIndexer.start(
       flow(producerSettings, topic),
       projectionId,
