@@ -85,7 +85,6 @@ class KafkaSupervisedConsumer[Event](settings: ConsumerSettings[String, String],
   private def kill(): Unit = self ! PoisonPill
 
   private def process(record: ConsumerRecord[String, String]): Future[Unit] = {
-    record.value
     parse(record.value).flatMap(decoder.decodeJson) match {
       case Right(event) =>
         log.debug(s"Received message: ${record.value}")
@@ -126,9 +125,8 @@ class KafkaSupervisedConsumer[Event](settings: ConsumerSettings[String, String],
 
   // $COVERAGE-OFF$
   private def storeFailure(record: ConsumerRecord[String, String]): Future[Unit] = failuresLog match {
-    case None => Future.successful(())
-    case Some(ifl) =>
-      ifl.storeEvent(record.key, NoOffset, record.value)
+    case None      => Future.successful(())
+    case Some(ifl) => ifl.storeEvent(record.key, NoOffset, record.value)
   }
 
   private def storeFailure(msg: CommittableMessage[String, String]): Future[Unit] = failuresLog match {
