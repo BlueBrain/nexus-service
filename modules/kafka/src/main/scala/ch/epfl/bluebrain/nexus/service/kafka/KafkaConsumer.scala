@@ -37,7 +37,7 @@ object KafkaConsumer {
       committable: Boolean = true,
       failuresLog: Option[IndexFailuresLog] = None)(implicit as: ActorSystem, decoder: Decoder[Event]): ActorRef = {
     val childProps =
-      Props(classOf[KafkaSupervisedConsumer[Event]], settings, index, topic, decoder, committable, failuresLog)
+      Props(new KafkaSupervisedConsumer[Event](settings, index, topic, decoder, committable, failuresLog))
     val supervisor = as.actorOf(
       BackoffSupervisor.props(
         Backoff.onStop(
