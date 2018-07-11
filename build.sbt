@@ -29,15 +29,15 @@ val akkaHttpVersion                 = "10.1.3"
 val akkaHttpCirceVersion            = "1.21.0"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
 val akkaPersistenceCassandraVersion = "0.85"
-val akkaStreamKafkaVersion          = "0.21.1"
+val akkaStreamKafkaVersion          = "0.22"
 val catsVersion                     = "1.0.1"
 val circeVersion                    = "0.9.3"
-val commonsVersion                  = "0.10.12"
+val commonsVersion                  = "0.10.16"
 val journalVersion                  = "3.0.19"
 val monixVersion                    = "2.3.3"
 val scalaTestVersion                = "3.0.5"
 val shapelessVersion                = "2.3.3"
-val sourcingVersion                 = "0.10.3"
+val sourcingVersion                 = "0.10.7"
 
 lazy val akkaActor           = "com.typesafe.akka" %% "akka-actor"            % akkaVersion
 lazy val akkaClusterSharding = "com.typesafe.akka" %% "akka-cluster-sharding" % akkaVersion
@@ -77,7 +77,7 @@ lazy val kamonAkkaHttp   = "io.kamon" %% "kamon-akka-http-2.5"   % "1.1.0"
 lazy val kamonAkkaRemote = "io.kamon" %% "kamon-akka-remote-2.5" % "1.0.1"
 
 lazy val scalaTest     = "org.scalatest" %% "scalatest"                % scalaTestVersion
-lazy val embeddedKafka = "net.manub"     %% "scalatest-embedded-kafka" % "1.1.0-kafka1.1-nosr"
+lazy val embeddedKafka = "net.manub"     %% "scalatest-embedded-kafka" % "1.1.0"
 
 lazy val http = project
   .in(file("modules/http"))
