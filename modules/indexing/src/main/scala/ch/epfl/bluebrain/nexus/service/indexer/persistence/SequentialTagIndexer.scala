@@ -8,9 +8,9 @@ import akka.event.Logging
 import akka.persistence.query.scaladsl.EventsByTagQuery
 import akka.persistence.query.{EventEnvelope, NoOffset, Offset, PersistenceQuery}
 import akka.stream.scaladsl.{Flow, Source}
-import ch.epfl.bluebrain.nexus.service.indexer.retryer.RetryOps._
 import ch.epfl.bluebrain.nexus.service.indexer.retryer.RetryStrategy
 import ch.epfl.bluebrain.nexus.service.indexer.retryer.RetryStrategy.Backoff
+import ch.epfl.bluebrain.nexus.service.indexer.retryer.syntax._
 import ch.epfl.bluebrain.nexus.service.indexer.stream.{SingletonStreamCoordinator, StreamCoordinator}
 import io.circe.Encoder
 import shapeless.Typeable
