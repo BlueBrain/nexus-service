@@ -11,7 +11,7 @@ import akka.persistence.query.{NoOffset, Sequence}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.IndexFailuresLog
-import ch.epfl.bluebrain.nexus.service.indexer.retryer.RetryOps._
+import ch.epfl.bluebrain.nexus.service.indexer.retryer.syntax._
 import ch.epfl.bluebrain.nexus.service.indexer.retryer.RetryStrategy.Backoff
 import io.circe._
 import io.circe.parser._
