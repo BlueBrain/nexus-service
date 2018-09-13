@@ -24,15 +24,15 @@ scalafmt: {
 }
  */
 
-val akkaVersion                     = "2.5.15"
-val akkaHttpVersion                 = "10.1.4"
+val akkaVersion                     = "2.5.16"
+val akkaHttpVersion                 = "10.1.5"
 val akkaHttpCirceVersion            = "1.21.0"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
 val akkaPersistenceCassandraVersion = "0.89"
 val akkaStreamKafkaVersion          = "0.22"
 val catsVersion                     = "1.1.2"
 val circeVersion                    = "0.9.3"
-val commonsVersion                  = "0.10.23"
+val commonsVersion                  = "0.10.27"
 val journalVersion                  = "3.0.19"
 val monixVersion                    = "2.3.3"
 val scalaTestVersion                = "3.0.5"
@@ -70,7 +70,7 @@ lazy val sourcingAkka       = "ch.epfl.bluebrain.nexus" %% "sourcing-akka"      
 lazy val kamonCore       = "io.kamon" %% "kamon-core"            % "1.1.3"
 lazy val kamonPrometheus = "io.kamon" %% "kamon-prometheus"      % "1.1.1"
 lazy val kamonJaeger     = "io.kamon" %% "kamon-jaeger"          % "1.0.2"
-lazy val kamonLogback    = "io.kamon" %% "kamon-logback"         % "1.0.2"
+lazy val kamonLogback    = "io.kamon" %% "kamon-logback"         % "1.0.3"
 lazy val kamonMetrics    = "io.kamon" %% "kamon-system-metrics"  % "1.0.0"
 lazy val kamonAkka       = "io.kamon" %% "kamon-akka-2.5"        % "1.1.2"
 lazy val kamonAkkaHttp   = "io.kamon" %% "kamon-akka-http-2.5"   % "1.1.0"
@@ -213,4 +213,4 @@ inThisBuild(
     releaseEarlyEnableSyncToMaven := false
   ))
 
-addCommandAlias("review", ";clean;scalafmtSbtCheck;coverage;scapegoat;test;coverageReport;coverageAggregate")
+addCommandAlias("review", ";clean;scalafmtCheck;test:scalafmtCheck;scalafmtSbtCheck;coverage;scapegoat;test;coverageReport;coverageAggregate")
