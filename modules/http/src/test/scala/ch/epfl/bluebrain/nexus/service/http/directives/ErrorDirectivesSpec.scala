@@ -24,7 +24,7 @@ class ErrorDirectivesSpec
 
   "A ErrorDirectives" should {
     import system.dispatcher
-    implicit val statusFromJson: StatusFrom[CustomError] = StatusFrom((err: CustomError) => StatusCodes.NotFound)
+    implicit val statusFromJson: StatusFrom[CustomError] = StatusFrom((_: CustomError) => StatusCodes.NotFound)
     implicit val contextUri: ContextUri                  = ContextUri(Uri("http://localhost.com/error/"))
 
     "marshall error JSON-LD" in {

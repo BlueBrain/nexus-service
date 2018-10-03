@@ -45,7 +45,8 @@ object KafkaConsumer {
           childName = s"$name-child",
           minBackoff = 3.seconds,
           maxBackoff = 30.seconds,
-          randomFactor = 0.2
+          randomFactor = 0.2,
+          maxNrOfRetries = -1
         )),
       name = s"$name-supervisor"
     )

@@ -24,20 +24,20 @@ scalafmt: {
 }
  */
 
-val akkaVersion                     = "2.5.16"
+val akkaVersion                     = "2.5.17"
 val akkaHttpVersion                 = "10.1.5"
-val akkaHttpCirceVersion            = "1.21.0"
+val akkaHttpCirceVersion            = "1.22.0"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
-val akkaPersistenceCassandraVersion = "0.89"
+val akkaPersistenceCassandraVersion = "0.90"
 val akkaStreamKafkaVersion          = "0.22"
-val catsVersion                     = "1.1.2"
-val circeVersion                    = "0.9.3"
-val commonsVersion                  = "0.10.27"
+val catsVersion                     = "1.4.0"
+val circeVersion                    = "0.10.0"
+val commonsVersion                  = "0.10.31"
 val journalVersion                  = "3.0.19"
-val monixVersion                    = "2.3.3"
+val monixVersion                    = "3.0.0-RC1"
 val scalaTestVersion                = "3.0.5"
 val shapelessVersion                = "2.3.3"
-val sourcingVersion                 = "0.10.7"
+val sourcingVersion                 = "0.10.8"
 
 lazy val akkaActor           = "com.typesafe.akka" %% "akka-actor"            % akkaVersion
 lazy val akkaClusterSharding = "com.typesafe.akka" %% "akka-cluster-sharding" % akkaVersion
