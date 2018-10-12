@@ -7,15 +7,17 @@ import akka.Done
 import akka.cluster.Cluster
 import akka.stream.ActorMaterializer
 import akka.testkit.{TestActorRef, TestKit, TestKitBase}
+import ch.epfl.bluebrain.nexus.commons.types.{Err, RetriableErr}
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.Fixture.{RetryExecuted, _}
+import ch.epfl.bluebrain.nexus.service.indexer.persistence.IndexerConfig.fromConfig
+import ch.epfl.bluebrain.nexus.service.indexer.persistence.SequentialTagIndexer._
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.SequentialTagIndexerSpec._
 import ch.epfl.bluebrain.nexus.service.indexer.stream.StreamCoordinator
 import ch.epfl.bluebrain.nexus.service.indexer.stream.StreamCoordinator.Stop
-import ch.epfl.bluebrain.nexus.commons.types.{Err, RetriableErr}
 import ch.epfl.bluebrain.nexus.sourcing.akka.{ShardingAggregate, SourcingAkkaSettings}
+import io.circe.generic.auto._
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.{BeforeAndAfterAll, DoNotDiscover, Matchers, WordSpecLike}
-import io.circe.generic.auto._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -59,21 +61,25 @@ class SequentialTagIndexerSpec
         Future.successful(())
       }
 
-    "index existing events" in {
-      val agg = ShardingAggregate("agg", sourcingSettings)(Fixture.initial, Fixture.next, Fixture.eval)
-      agg.append("first", Fixture.Executed).futureValue
+    sealed abstract class Context[T](name: String, batch: Int = 1) {
+      val agg = ShardingAggregate(name, sourcingSettings)(Fixture.initial, Fixture.next, Fixture.eval)
 
       val count = new AtomicLong(0L)
       val init  = new AtomicLong(10L)
-      val index = (_: Event) =>
+      val index = (l: List[T]) =>
         Future.successful[Unit] {
+          l.size shouldEqual batch
           val _ = count.incrementAndGet()
       }
-      val projId = UUID.randomUUID().toString
 
-      val initialize = SequentialTagIndexer.initialize(initFunction(init), projId)
-      val source     = SequentialTagIndexer.source(index, projId, pluginId, "executed")
-      val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
+      val projId = UUID.randomUUID().toString
+    }
+
+    "index existing events" in new Context[Event]("agg") {
+      agg.append("first", Fixture.Executed).futureValue
+
+      val config  = fromConfig.name(projId).plugin(pluginId).tag("executed").init(initFunction(init)).index(index).build
+      val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
 
       eventually {
         count.get() shouldEqual 1L
@@ -85,7 +91,7 @@ class SequentialTagIndexerSpec
       expectTerminated(indexer)
     }
 
-    "recover from temporary failures on init function" in {
+    "recover from temporary failures on init function" in new Context[Event]("something") {
 
       val initCalled = new AtomicLong(0L)
 
@@ -99,20 +105,10 @@ class SequentialTagIndexerSpec
           }
         }
 
-      val agg = ShardingAggregate("something", sourcingSettings)(Fixture.initial, Fixture.next, Fixture.eval)
       agg.append("a", Fixture.YetAnotherExecuted).futureValue
 
-      val count = new AtomicLong(0L)
-      val init  = new AtomicLong(10L)
-      val index = (_: Event) =>
-        Future.successful[Unit] {
-          val _ = count.incrementAndGet()
-      }
-      val projId = UUID.randomUUID().toString
-
-      val initialize = SequentialTagIndexer.initialize(initFail(init), projId)
-      val source     = SequentialTagIndexer.source(index, projId, pluginId, "yetanother")
-      val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
+      val config  = fromConfig.name(projId).plugin(pluginId).tag("yetanother").index(index).init(initFail(init)).build
+      val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
 
       eventually {
         initCalled.get() shouldEqual 2L
@@ -125,26 +121,18 @@ class SequentialTagIndexerSpec
       expectTerminated(indexer)
     }
 
-    "select only the configured event types" in {
-      val agg = ShardingAggregate("selected", sourcingSettings)(Fixture.initial, Fixture.next, Fixture.eval)
+    "select only the configured event types" in new Context[Event](name = "selected", batch = 2) {
       agg.append("first", Fixture.Executed).futureValue
       agg.append("second", Fixture.Executed).futureValue
       agg.append("third", Fixture.Executed).futureValue
-      agg.append("selected", Fixture.OtherExecuted).futureValue
-      agg.append("selected", Fixture.OtherExecuted).futureValue
+      agg.append("selected1", Fixture.OtherExecuted).futureValue
+      agg.append("selected2", Fixture.OtherExecuted).futureValue
+      agg.append("selected3", Fixture.OtherExecuted).futureValue
+      agg.append("selected4", Fixture.OtherExecuted).futureValue
 
-      val count = new AtomicLong(0L)
-      val init  = new AtomicLong(10L)
-
-      val index = (_: OtherExecuted.type) =>
-        Future.successful[Unit] {
-          val _ = count.incrementAndGet()
-      }
-      val projId = UUID.randomUUID().toString
-
-      val initialize = SequentialTagIndexer.initialize(initFunction(init), projId)
-      val source     = SequentialTagIndexer.source(index, projId, pluginId, "other")
-      val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
+      val config =
+        fromConfig.name(projId).plugin(pluginId).tag("other").index(index).batch(2).init(initFunction(init)).build
+      val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
 
       eventually {
         count.get() shouldEqual 2L
@@ -156,21 +144,11 @@ class SequentialTagIndexerSpec
       expectTerminated(indexer)
     }
 
-    "restart the indexing if the Done is emitted" in {
-      val agg = ShardingAggregate("agg", sourcingSettings)(Fixture.initial, Fixture.next, Fixture.eval)
+    "restart the indexing if the Done is emitted" in new Context[Event]("agg2") {
       agg.append("first", Fixture.AnotherExecuted).futureValue
 
-      val count = new AtomicLong(0L)
-      val init  = new AtomicLong(10L)
-      val index = (_: Event) =>
-        Future.successful[Unit] {
-          val _ = count.incrementAndGet()
-      }
-      val projId = UUID.randomUUID().toString
-
-      val initialize = SequentialTagIndexer.initialize(initFunction(init), projId)
-      val source     = SequentialTagIndexer.source(index, projId, pluginId, "another")
-      val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
+      val config  = fromConfig.name(projId).plugin(pluginId).tag("another").index(index).init(initFunction(init)).build
+      val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
 
       eventually {
         count.get() shouldEqual 1L
@@ -190,19 +168,13 @@ class SequentialTagIndexerSpec
       expectTerminated(indexer)
     }
 
-    "retry when index function fails" in {
-      val agg = ShardingAggregate("retry", sourcingSettings)(Fixture.initial, Fixture.next, Fixture.eval)
+    "retry when index function fails" in new Context[RetryExecuted.type]("retry") {
       agg.append("retry", Fixture.RetryExecuted).futureValue
 
-      val count = new AtomicLong(0L)
-      val init  = new AtomicLong(10L)
+      override val index = (_: List[RetryExecuted.type]) => Future.failed[Unit](SomeError(count.incrementAndGet()))
 
-      val index  = (_: RetryExecuted.type) => Future.failed[Unit](SomeError(count.incrementAndGet()))
-      val projId = UUID.randomUUID().toString
-
-      val initialize = SequentialTagIndexer.initialize(initFunction(init), projId)
-      val source     = SequentialTagIndexer.source(index, projId, pluginId, "retry")
-      val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
+      val config  = fromConfig.name(projId).plugin(pluginId).tag("retry").index(index).init(initFunction(init)).build
+      val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
 
       eventually {
         count.get() shouldEqual 4
@@ -220,20 +192,14 @@ class SequentialTagIndexerSpec
       expectTerminated(indexer)
     }
 
-    "not retry when index function fails with a non RetriableErr" in {
-      val agg = ShardingAggregate("ignore", sourcingSettings)(Fixture.initial, Fixture.next, Fixture.eval)
+    "not retry when index function fails with a non RetriableErr" in new Context[IgnoreExecuted.type]("ignore") {
       agg.append("ignore", Fixture.IgnoreExecuted).futureValue
 
-      val count = new AtomicLong(0L)
-      val init  = new AtomicLong(10L)
+      override val index =
+        (_: List[IgnoreExecuted.type]) => Future.failed[Unit](SomeOtherError(count.incrementAndGet()))
 
-      val index =
-        (_: IgnoreExecuted.type) => Future.failed[Unit](SomeOtherError(count.incrementAndGet()))
-      val projId = UUID.randomUUID().toString
-
-      val initialize = SequentialTagIndexer.initialize(initFunction(init), projId)
-      val source     = SequentialTagIndexer.source(index, projId, pluginId, "ignore")
-      val indexer    = TestActorRef(new StreamCoordinator(initialize, source))
+      val config  = fromConfig.name(projId).plugin(pluginId).tag("ignore").index(index).init(initFunction(init)).build
+      val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
 
       eventually {
         count.get() shouldEqual 1L

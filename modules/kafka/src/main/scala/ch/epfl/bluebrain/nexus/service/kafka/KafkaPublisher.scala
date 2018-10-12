@@ -2,14 +2,13 @@ package ch.epfl.bluebrain.nexus.service.kafka
 
 import java.util.concurrent.Future
 
-import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.kafka.ProducerMessage._
 import akka.kafka.ProducerSettings
 import akka.kafka.scaladsl.Producer
-import akka.persistence.query.Offset
-import akka.stream.scaladsl.Flow
-import ch.epfl.bluebrain.nexus.service.indexer.persistence.SequentialTagIndexer
+import akka.stream.scaladsl.{Flow, Source}
+import ch.epfl.bluebrain.nexus.service.indexer.persistence.SequentialTagIndexer.{Graph, OffsetEvts}
+import ch.epfl.bluebrain.nexus.service.indexer.persistence.{IndexerConfig, SequentialTagIndexer}
 import ch.epfl.bluebrain.nexus.service.kafka.key._
 import io.circe.Encoder
 import io.circe.syntax._
@@ -41,12 +40,15 @@ class KafkaPublisher[Event: Encoder: Key](producer: KafkaProducer[String, String
 object KafkaPublisher {
 
   private def flow[Event: Encoder: Key](producerSettings: ProducerSettings[String, String],
-                                        topic: String): Flow[(Offset, String, Event), Offset, NotUsed] = {
-    Flow[(Offset, String, Event)]
+                                        topic: String): Graph[Event] = {
+    Flow[OffsetEvts[Event]]
       .map {
-        case (off, _, event) =>
-          Message(new ProducerRecord[String, String](topic, event.key, event.asJson.noSpaces), off)
+        case OffsetEvts(off, events) =>
+          events.map { event =>
+            Message(new ProducerRecord[String, String](topic, event.value.key, event.value.asJson.noSpaces), off)
+          }
       }
+      .flatMapConcat(Source.apply)
       .via(Producer.flexiFlow(producerSettings))
       .map(_.passThrough)
 
@@ -55,7 +57,6 @@ object KafkaPublisher {
   /**
     * Starts publishing events to Kafka using a [[ch.epfl.bluebrain.nexus.service.indexer.persistence.SequentialTagIndexer]]
     *
-    * @param projectionId projection to user for publishing events
     * @param pluginId query plugin ID
     * @param tag events with which tag to publish
     * @param name name of the actor
@@ -65,18 +66,13 @@ object KafkaPublisher {
     * @tparam Event the generic event type
     * @return ActorRef for the started actor
     */
-  final def startTagStream[Event: Encoder: Key: Typeable](projectionId: String,
-                                                          pluginId: String,
+  final def startTagStream[Event: Encoder: Key: Typeable](pluginId: String,
                                                           tag: String,
                                                           name: String,
                                                           producerSettings: ProducerSettings[String, String],
-                                                          topic: String)(implicit as: ActorSystem): ActorRef =
-    SequentialTagIndexer.start(
-      flow(producerSettings, topic),
-      projectionId,
-      pluginId,
-      tag,
-      name
-    )
+                                                          topic: String)(implicit as: ActorSystem): ActorRef = {
+    val config = IndexerConfig.builder.plugin(pluginId).name(name).tag(tag).flow(flow(producerSettings, topic)).build
+    SequentialTagIndexer.start(config)
+  }
   // $COVERAGE-ON$
 }
