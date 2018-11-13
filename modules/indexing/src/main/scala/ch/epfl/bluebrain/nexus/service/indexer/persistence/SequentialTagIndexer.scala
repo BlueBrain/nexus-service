@@ -66,6 +66,7 @@ object SequentialTagIndexer {
         .readJournalFor[EventsByTagQuery](pluginId)
         .eventsByTag(tag, offset)
         .groupedWithin(batch, timeout)
+        .filter(_.nonEmpty)
         .flatMapConcat { events =>
           castEvents(events.toList) match {
             case Some(transformed) => Source.single(transformed)
