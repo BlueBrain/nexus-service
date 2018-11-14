@@ -66,6 +66,7 @@ object SequentialTagIndexer {
         .readJournalFor[EventsByTagQuery](pluginId)
         .eventsByTag(tag, offset)
         .groupedWithin(batch, timeout)
+        .filter(_.nonEmpty)
         .flatMapConcat { events =>
           castEvents(events.toList) match {
             case Some(transformed) => Source.single(transformed)
@@ -120,7 +121,15 @@ object SequentialTagIndexer {
               (() => c.index(events.map(_.value)))
                 .retry(c.retries)
                 .recoverWith {
-                  case _ => Future.sequence(events.map(el => failureLog.storeEvent(el.persistenceId, off, el.value)))
+                  case err =>
+                    Future.sequence(events.map { el =>
+                      log.error(err,
+                                "Indexing event with id '{}' and value '{}' failed'{}'",
+                                el.persistenceId,
+                                el.value,
+                                err.getMessage)
+                      failureLog.storeEvent(el.persistenceId, off, el.value)
+                    })
                 }
                 .map(_ => off)
           }

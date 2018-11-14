@@ -25,7 +25,11 @@ class StreamCoordinator[A: Typeable, E](init: () => Future[A], source: A => Sour
   private implicit val mt: ActorMaterializer = ActorMaterializer()
 
   private def initialize(): Unit = {
-    val _ = init().map(Start).recover { case _ => initialize() } pipeTo self
+    val _ = init().map(Start).recover {
+      case err =>
+        log.error(err, "Failed on initialize function with error '{}'", err.getMessage)
+        initialize()
+    } pipeTo self
   }
 
   override def preStart(): Unit = {
