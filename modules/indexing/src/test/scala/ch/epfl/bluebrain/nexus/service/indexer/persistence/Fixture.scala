@@ -1,6 +1,7 @@
 package ch.epfl.bluebrain.nexus.service.indexer.persistence
 
 import akka.persistence.journal.{Tagged, WriteEventAdapter}
+import cats.effect.IO
 import com.github.ghik.silencer.silent
 
 object Fixture {
@@ -44,13 +45,13 @@ object Fixture {
   @silent
   def next(state: State, event: Event): State = Perpetual
   @silent
-  def eval(state: State, cmd: Cmd): Either[Rejection, Event] = cmd match {
-    case Execute           => Right(Executed)
-    case ExecuteOther      => Right(OtherExecuted)
-    case ExecuteAnother    => Right(AnotherExecuted)
-    case ExecuteYetAnother => Right(YetAnotherExecuted)
-    case ExecuteRetry      => Right(RetryExecuted)
-    case ExecuteIgnore     => Right(IgnoreExecuted)
+  def eval(state: State, cmd: Cmd): IO[Either[Rejection, Event]] = cmd match {
+    case Execute           => IO.pure(Right(Executed))
+    case ExecuteOther      => IO.pure(Right(OtherExecuted))
+    case ExecuteAnother    => IO.pure(Right(AnotherExecuted))
+    case ExecuteYetAnother => IO.pure(Right(YetAnotherExecuted))
+    case ExecuteRetry      => IO.pure(Right(RetryExecuted))
+    case ExecuteIgnore     => IO.pure(Right(IgnoreExecuted))
 
   }
 }
