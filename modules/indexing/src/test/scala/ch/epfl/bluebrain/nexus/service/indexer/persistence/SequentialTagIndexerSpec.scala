@@ -7,6 +7,8 @@ import akka.Done
 import akka.cluster.Cluster
 import akka.stream.ActorMaterializer
 import akka.testkit.{TestActorRef, TestKit, TestKitBase}
+import akka.util.Timeout
+import cats.effect.IO
 import ch.epfl.bluebrain.nexus.commons.types.{Err, RetriableErr}
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.Fixture.{RetryExecuted, _}
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.IndexerConfig.fromConfig
@@ -14,12 +16,12 @@ import ch.epfl.bluebrain.nexus.service.indexer.persistence.SequentialTagIndexer.
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.SequentialTagIndexerSpec._
 import ch.epfl.bluebrain.nexus.service.indexer.stream.StreamCoordinator
 import ch.epfl.bluebrain.nexus.service.indexer.stream.StreamCoordinator.Stop
-import ch.epfl.bluebrain.nexus.sourcing.akka.{ShardingAggregate, SourcingAkkaSettings}
+import ch.epfl.bluebrain.nexus.sourcing.akka._
 import io.circe.generic.auto._
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.{BeforeAndAfterAll, DoNotDiscover, Matchers, WordSpecLike}
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 
 //noinspection TypeAnnotation
@@ -52,8 +54,13 @@ class SequentialTagIndexerSpec
     PatienceConfig(30 seconds, 1 second)
 
   "A SequentialTagIndexer" should {
-    val pluginId         = "cassandra-query-journal"
-    val sourcingSettings = SourcingAkkaSettings(journalPluginId = pluginId)
+    val pluginId = "cassandra-query-journal"
+    val config = AkkaSourcingConfig(
+      Timeout(30.second),
+      pluginId,
+      200.milliseconds,
+      ExecutionContext.global
+    )
 
     def initFunction(init: AtomicLong): () => Future[Unit] =
       () => {
@@ -62,7 +69,18 @@ class SequentialTagIndexerSpec
       }
 
     sealed abstract class Context[T](name: String, batch: Int = 1) {
-      val agg = ShardingAggregate(name, sourcingSettings)(Fixture.initial, Fixture.next, Fixture.eval)
+      val agg = AkkaAggregate
+        .sharded[IO](
+          name,
+          Fixture.initial,
+          Fixture.next,
+          Fixture.eval,
+          PassivationStrategy.immediately[State, Cmd],
+          RetryStrategy.never[IO],
+          config,
+          shards = 10
+        )
+        .unsafeRunSync()
 
       val count = new AtomicLong(0L)
       val init  = new AtomicLong(10L)
@@ -76,13 +94,13 @@ class SequentialTagIndexerSpec
     }
 
     "index existing events" in new Context[Event]("agg") {
-      agg.append("first", Fixture.Executed).futureValue
+      agg.append("first", Fixture.Executed).unsafeRunSync()
 
       val config  = fromConfig.name(projId).plugin(pluginId).tag("executed").init(initFunction(init)).index(index).build
       val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
 
       eventually {
-        count.get() shouldEqual 1L
+        count.get shouldEqual 1L
         init.get shouldEqual 11L
       }
 
@@ -105,15 +123,15 @@ class SequentialTagIndexerSpec
           }
         }
 
-      agg.append("a", Fixture.YetAnotherExecuted).futureValue
+      agg.append("a", Fixture.YetAnotherExecuted).unsafeRunSync()
 
       val config  = fromConfig.name(projId).plugin(pluginId).tag("yetanother").index(index).init(initFail(init)).build
       val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
 
       eventually {
-        initCalled.get() shouldEqual 2L
+        initCalled.get shouldEqual 2L
         init.get shouldEqual 11L
-        count.get() shouldEqual 1L
+        count.get shouldEqual 1L
       }
 
       watch(indexer)
@@ -122,20 +140,20 @@ class SequentialTagIndexerSpec
     }
 
     "select only the configured event types" in new Context[Event](name = "selected", batch = 2) {
-      agg.append("first", Fixture.Executed).futureValue
-      agg.append("second", Fixture.Executed).futureValue
-      agg.append("third", Fixture.Executed).futureValue
-      agg.append("selected1", Fixture.OtherExecuted).futureValue
-      agg.append("selected2", Fixture.OtherExecuted).futureValue
-      agg.append("selected3", Fixture.OtherExecuted).futureValue
-      agg.append("selected4", Fixture.OtherExecuted).futureValue
+      agg.append("first", Fixture.Executed).unsafeRunSync()
+      agg.append("second", Fixture.Executed).unsafeRunSync()
+      agg.append("third", Fixture.Executed).unsafeRunSync()
+      agg.append("selected1", Fixture.OtherExecuted).unsafeRunSync()
+      agg.append("selected2", Fixture.OtherExecuted).unsafeRunSync()
+      agg.append("selected3", Fixture.OtherExecuted).unsafeRunSync()
+      agg.append("selected4", Fixture.OtherExecuted).unsafeRunSync()
 
       val config =
         fromConfig.name(projId).plugin(pluginId).tag("other").index(index).batch(2).init(initFunction(init)).build
       val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
 
       eventually {
-        count.get() shouldEqual 2L
+        count.get shouldEqual 2L
         init.get shouldEqual 11L
       }
 
@@ -145,21 +163,21 @@ class SequentialTagIndexerSpec
     }
 
     "restart the indexing if the Done is emitted" in new Context[Event]("agg2") {
-      agg.append("first", Fixture.AnotherExecuted).futureValue
+      agg.append("first", Fixture.AnotherExecuted).unsafeRunSync()
 
       val config  = fromConfig.name(projId).plugin(pluginId).tag("another").index(index).init(initFunction(init)).build
       val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
 
       eventually {
-        count.get() shouldEqual 1L
+        count.get shouldEqual 1L
         init.get shouldEqual 11L
       }
       indexer ! Done
 
-      agg.append("second", Fixture.AnotherExecuted).futureValue
+      agg.append("second", Fixture.AnotherExecuted).unsafeRunSync()
 
       eventually {
-        count.get() shouldEqual 2L
+        count.get shouldEqual 2L
         init.get shouldEqual 12L
       }
 
@@ -169,7 +187,7 @@ class SequentialTagIndexerSpec
     }
 
     "retry when index function fails" in new Context[RetryExecuted.type]("retry") {
-      agg.append("retry", Fixture.RetryExecuted).futureValue
+      agg.append("retry", Fixture.RetryExecuted).unsafeRunSync()
 
       override val index = (_: List[RetryExecuted.type]) => Future.failed[Unit](SomeError(count.incrementAndGet()))
 
@@ -177,7 +195,7 @@ class SequentialTagIndexerSpec
       val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
 
       eventually {
-        count.get() shouldEqual 4
+        count.get shouldEqual 4
         init.get shouldEqual 11L
       }
       eventually {
@@ -193,7 +211,7 @@ class SequentialTagIndexerSpec
     }
 
     "not retry when index function fails with a non RetriableErr" in new Context[IgnoreExecuted.type]("ignore") {
-      agg.append("ignore", Fixture.IgnoreExecuted).futureValue
+      agg.append("ignore", Fixture.IgnoreExecuted).unsafeRunSync()
 
       override val index =
         (_: List[IgnoreExecuted.type]) => Future.failed[Unit](SomeOtherError(count.incrementAndGet()))
@@ -202,7 +220,7 @@ class SequentialTagIndexerSpec
       val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
 
       eventually {
-        count.get() shouldEqual 1L
+        count.get shouldEqual 1L
         init.get shouldEqual 11L
       }
 

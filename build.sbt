@@ -24,20 +24,20 @@ scalafmt: {
 }
  */
 
-val akkaVersion                     = "2.5.17"
+val akkaVersion                     = "2.5.18"
 val akkaHttpVersion                 = "10.1.5"
 val akkaHttpCirceVersion            = "1.22.0"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
-val akkaPersistenceCassandraVersion = "0.90"
+val akkaPersistenceCassandraVersion = "0.91"
 val akkaStreamKafkaVersion          = "0.22"
 val catsVersion                     = "1.4.0"
-val circeVersion                    = "0.10.0"
-val commonsVersion                  = "0.10.33"
+val circeVersion                    = "0.10.1"
+val commonsVersion                  = "0.10.37"
 val journalVersion                  = "3.0.19"
 val monixVersion                    = "3.0.0-RC1"
 val scalaTestVersion                = "3.0.5"
 val shapelessVersion                = "2.3.3"
-val sourcingVersion                 = "0.10.8"
+val sourcingVersion                 = "0.12.0"
 
 lazy val akkaActor           = "com.typesafe.akka" %% "akka-actor"            % akkaVersion
 lazy val akkaClusterSharding = "com.typesafe.akka" %% "akka-cluster-sharding" % akkaVersion
@@ -73,7 +73,7 @@ lazy val kamonJaeger     = "io.kamon" %% "kamon-jaeger"          % "1.0.2"
 lazy val kamonLogback    = "io.kamon" %% "kamon-logback"         % "1.0.3"
 lazy val kamonMetrics    = "io.kamon" %% "kamon-system-metrics"  % "1.0.0"
 lazy val kamonAkka       = "io.kamon" %% "kamon-akka-2.5"        % "1.1.2"
-lazy val kamonAkkaHttp   = "io.kamon" %% "kamon-akka-http-2.5"   % "1.1.0"
+lazy val kamonAkkaHttp   = "io.kamon" %% "kamon-akka-http-2.5"   % "1.1.1"
 lazy val kamonAkkaRemote = "io.kamon" %% "kamon-akka-remote-2.5" % "1.1.0"
 
 lazy val scalaTest     = "org.scalatest" %% "scalatest"                % scalaTestVersion
