@@ -57,9 +57,8 @@ object RetryOps {
     */
   def retryWhenNot[A, B](source: () => Future[A], pf: PartialFunction[A, B], maxRetries: Int, strategy: RetryStrategy)(
       implicit ec: ExecutionContext): Future[B] = {
-    val s           = Task.deferFuture(source())
-    implicit val sc = Scheduler(ec)
-    retryWhenNot(s, pf, maxRetries, strategy).runAsync
+    val s = Task.deferFuture(source())
+    retryWhenNot(s, pf, maxRetries, strategy).runToFuture(Scheduler(ec))
   }
 
   /**
@@ -83,9 +82,8 @@ object RetryOps {
     */
   def retry[A](source: () => Future[A], maxRetries: Int, strategy: RetryStrategy)(
       implicit ec: ExecutionContext): Future[A] = {
-    val s           = Task.deferFuture(source())
-    implicit val sc = Scheduler(ec)
-    retry(s, maxRetries, strategy).runAsync
+    val s = Task.deferFuture(source())
+    retry(s, maxRetries, strategy).runToFuture(Scheduler(ec))
   }
 }
 

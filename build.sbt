@@ -32,9 +32,9 @@ val akkaPersistenceCassandraVersion = "0.91"
 val akkaStreamKafkaVersion          = "0.22"
 val catsVersion                     = "1.4.0"
 val circeVersion                    = "0.10.1"
-val commonsVersion                  = "0.10.37"
+val commonsVersion                  = "0.10.39"
 val journalVersion                  = "3.0.19"
-val monixVersion                    = "3.0.0-RC1"
+val monixVersion                    = "3.0.0-RC2"
 val scalaTestVersion                = "3.0.5"
 val shapelessVersion                = "2.3.3"
 val sourcingVersion                 = "0.12.0"
@@ -97,6 +97,15 @@ lazy val http = project
       circeParser        % Test,
       scalaTest          % Test
     )
+  )
+
+lazy val test = project
+  .in(file("modules/test"))
+  .settings(
+    name                := "service-test",
+    moduleName          := "service-test",
+    coverageEnabled     := false,
+    libraryDependencies ++= Seq(akkaClusterSharding, akkaTestKit, scalaTest)
   )
 
 lazy val indexing = project
@@ -184,7 +193,7 @@ lazy val root = project
     name       := "service",
     moduleName := "service"
   )
-  .aggregate(http, indexing, kafka, serialization, kamon)
+  .aggregate(http, test, indexing, kafka, serialization, kamon)
 
 /* ********************************************************
  ******************** Grouped Settings ********************

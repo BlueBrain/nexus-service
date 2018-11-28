@@ -94,7 +94,7 @@ class SequentialTagIndexerSpec
     }
 
     "index existing events" in new Context[Event]("agg") {
-      agg.append("first", Fixture.Executed).unsafeRunSync()
+      agg.append("first", Fixture.Executed).unsafeRunAsyncAndForget()
 
       val config  = fromConfig.name(projId).plugin(pluginId).tag("executed").init(initFunction(init)).index(index).build
       val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
@@ -123,7 +123,7 @@ class SequentialTagIndexerSpec
           }
         }
 
-      agg.append("a", Fixture.YetAnotherExecuted).unsafeRunSync()
+      agg.append("a", Fixture.YetAnotherExecuted).unsafeRunAsyncAndForget()
 
       val config  = fromConfig.name(projId).plugin(pluginId).tag("yetanother").index(index).init(initFail(init)).build
       val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
@@ -140,13 +140,13 @@ class SequentialTagIndexerSpec
     }
 
     "select only the configured event types" in new Context[Event](name = "selected", batch = 2) {
-      agg.append("first", Fixture.Executed).unsafeRunSync()
-      agg.append("second", Fixture.Executed).unsafeRunSync()
-      agg.append("third", Fixture.Executed).unsafeRunSync()
-      agg.append("selected1", Fixture.OtherExecuted).unsafeRunSync()
-      agg.append("selected2", Fixture.OtherExecuted).unsafeRunSync()
-      agg.append("selected3", Fixture.OtherExecuted).unsafeRunSync()
-      agg.append("selected4", Fixture.OtherExecuted).unsafeRunSync()
+      agg.append("first", Fixture.Executed).unsafeRunAsyncAndForget()
+      agg.append("second", Fixture.Executed).unsafeRunAsyncAndForget()
+      agg.append("third", Fixture.Executed).unsafeRunAsyncAndForget()
+      agg.append("selected1", Fixture.OtherExecuted).unsafeRunAsyncAndForget()
+      agg.append("selected2", Fixture.OtherExecuted).unsafeRunAsyncAndForget()
+      agg.append("selected3", Fixture.OtherExecuted).unsafeRunAsyncAndForget()
+      agg.append("selected4", Fixture.OtherExecuted).unsafeRunAsyncAndForget()
 
       val config =
         fromConfig.name(projId).plugin(pluginId).tag("other").index(index).batch(2).init(initFunction(init)).build
@@ -163,7 +163,7 @@ class SequentialTagIndexerSpec
     }
 
     "restart the indexing if the Done is emitted" in new Context[Event]("agg2") {
-      agg.append("first", Fixture.AnotherExecuted).unsafeRunSync()
+      agg.append("first", Fixture.AnotherExecuted).unsafeRunAsyncAndForget()
 
       val config  = fromConfig.name(projId).plugin(pluginId).tag("another").index(index).init(initFunction(init)).build
       val indexer = TestActorRef(new StreamCoordinator(config.prepareInit, config.source))
@@ -174,7 +174,7 @@ class SequentialTagIndexerSpec
       }
       indexer ! Done
 
-      agg.append("second", Fixture.AnotherExecuted).unsafeRunSync()
+      agg.append("second", Fixture.AnotherExecuted).unsafeRunAsyncAndForget()
 
       eventually {
         count.get shouldEqual 2L
@@ -187,7 +187,7 @@ class SequentialTagIndexerSpec
     }
 
     "retry when index function fails" in new Context[RetryExecuted.type]("retry") {
-      agg.append("retry", Fixture.RetryExecuted).unsafeRunSync()
+      agg.append("retry", Fixture.RetryExecuted).unsafeRunAsyncAndForget()
 
       override val index = (_: List[RetryExecuted.type]) => Future.failed[Unit](SomeError(count.incrementAndGet()))
 
@@ -211,7 +211,7 @@ class SequentialTagIndexerSpec
     }
 
     "not retry when index function fails with a non RetriableErr" in new Context[IgnoreExecuted.type]("ignore") {
-      agg.append("ignore", Fixture.IgnoreExecuted).unsafeRunSync()
+      agg.append("ignore", Fixture.IgnoreExecuted).unsafeRunAsyncAndForget()
 
       override val index =
         (_: List[IgnoreExecuted.type]) => Future.failed[Unit](SomeOtherError(count.incrementAndGet()))
