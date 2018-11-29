@@ -92,13 +92,13 @@ class RetryOpsSpec
 
       "retry exponentially when it fails capped to 1 second" in new Context {
         private implicit val backoff = Backoff(1 seconds, 0)
-        task.retry(3).runAsync.failed.futureValue(timeout(Span(3, Seconds))) shouldBe SomeError
+        task.retry(3).runToFuture.failed.futureValue(timeout(Span(3, Seconds))) shouldBe SomeError
         count.get shouldEqual 4
       }
 
       "retry when the condition is not satisfied" in new Condition(3) {
         private implicit val backoff = Backoff(1 seconds, 0)
-        task.retryWhenNot { case Some(a) => a }.runAsync.futureValue shouldEqual 3L
+        task.retryWhenNot { case Some(a) => a }.runToFuture.futureValue shouldEqual 3L
         count.get shouldEqual 3
       }
     }
