@@ -24,23 +24,26 @@ scalafmt: {
 }
  */
 
-val akkaVersion                     = "2.5.18"
+val akkaVersion                     = "2.5.19"
 val akkaHttpVersion                 = "10.1.5"
 val akkaHttpCirceVersion            = "1.22.0"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
 val akkaPersistenceCassandraVersion = "0.91"
 val akkaStreamKafkaVersion          = "0.22"
 val catsVersion                     = "1.4.0"
+val catsEffectVersion               = "1.1.0"
 val circeVersion                    = "0.10.1"
-val commonsVersion                  = "0.10.39"
+val commonsVersion                  = "0.10.41"
 val journalVersion                  = "3.0.19"
 val monixVersion                    = "3.0.0-RC2"
 val scalaTestVersion                = "3.0.5"
 val shapelessVersion                = "2.3.3"
-val sourcingVersion                 = "0.12.0"
+val sourcingVersion                 = "0.12.2"
 
 lazy val akkaActor           = "com.typesafe.akka" %% "akka-actor"            % akkaVersion
+lazy val akkaCluster         = "com.typesafe.akka" %% "akka-cluster"          % akkaVersion
 lazy val akkaClusterSharding = "com.typesafe.akka" %% "akka-cluster-sharding" % akkaVersion
+lazy val akkaDistributedData = "com.typesafe.akka" %% "akka-distributed-data" % akkaVersion
 lazy val akkaTestKit         = "com.typesafe.akka" %% "akka-testkit"          % akkaVersion
 lazy val akkaHttp            = "com.typesafe.akka" %% "akka-http"             % akkaHttpVersion
 lazy val akkaHttpTestKit     = "com.typesafe.akka" %% "akka-http-testkit"     % akkaHttpVersion
@@ -59,6 +62,7 @@ lazy val circeCore          = "io.circe"                %% "circe-core"         
 lazy val circeParser        = "io.circe"                %% "circe-parser"         % circeVersion
 lazy val circeGenericExtras = "io.circe"                %% "circe-generic-extras" % circeVersion
 lazy val catsCore           = "org.typelevel"           %% "cats-core"            % catsVersion
+lazy val catsEffect         = "org.typelevel"           %% "cats-effect"          % catsEffectVersion
 lazy val commonsTest        = "ch.epfl.bluebrain.nexus" %% "commons-test"         % commonsVersion
 lazy val commonsTypes       = "ch.epfl.bluebrain.nexus" %% "commons-types"        % commonsVersion
 lazy val commonsHttp        = "ch.epfl.bluebrain.nexus" %% "commons-http"         % commonsVersion
@@ -67,12 +71,12 @@ lazy val monixEval          = "io.monix"                %% "monix-eval"         
 lazy val shapeless          = "com.chuusai"             %% "shapeless"            % shapelessVersion
 lazy val sourcingAkka       = "ch.epfl.bluebrain.nexus" %% "sourcing-akka"        % sourcingVersion
 
-lazy val kamonCore       = "io.kamon" %% "kamon-core"            % "1.1.3"
+lazy val kamonCore       = "io.kamon" %% "kamon-core"            % "1.1.4"
 lazy val kamonPrometheus = "io.kamon" %% "kamon-prometheus"      % "1.1.1"
 lazy val kamonJaeger     = "io.kamon" %% "kamon-jaeger"          % "1.0.2"
-lazy val kamonLogback    = "io.kamon" %% "kamon-logback"         % "1.0.3"
+lazy val kamonLogback    = "io.kamon" %% "kamon-logback"         % "1.0.4"
 lazy val kamonMetrics    = "io.kamon" %% "kamon-system-metrics"  % "1.0.0"
-lazy val kamonAkka       = "io.kamon" %% "kamon-akka-2.5"        % "1.1.2"
+lazy val kamonAkka       = "io.kamon" %% "kamon-akka-2.5"        % "1.1.3"
 lazy val kamonAkkaHttp   = "io.kamon" %% "kamon-akka-http-2.5"   % "1.1.1"
 lazy val kamonAkkaRemote = "io.kamon" %% "kamon-akka-remote-2.5" % "1.1.0"
 
@@ -87,6 +91,7 @@ lazy val http = project
     libraryDependencies ++= Seq(
       akkaHttp,
       akkaHttpCirce,
+      catsEffect,
       circeCore,
       circeParser,
       commonsHttp,
@@ -110,11 +115,14 @@ lazy val test = project
 
 lazy val indexing = project
   .in(file("modules/indexing"))
+  .dependsOn(test)
   .settings(
     name       := "service-indexing",
     moduleName := "service-indexing",
     libraryDependencies ++= Seq(
       akkaActor,
+      akkaCluster,
+      akkaDistributedData,
       akkaPersistenceCassandra,
       circeCore,
       circeParser,
@@ -122,13 +130,14 @@ lazy val indexing = project
       monixEval,
       journal,
       shapeless,
+      sourcingAkka,
       akkaPersistenceLauncher % Test,
       akkaTestKit             % Test,
       akkaHttpTestKit         % Test,
       akkaSlf4j               % Test,
       circeGenericExtras      % Test,
+      commonsTest             % Test,
       scalaTest               % Test,
-      sourcingAkka            % Test
     )
   )
 
