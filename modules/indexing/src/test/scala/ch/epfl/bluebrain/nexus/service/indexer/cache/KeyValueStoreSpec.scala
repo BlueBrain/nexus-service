@@ -82,6 +82,7 @@ class KeyValueStoreSpec
 
   }
 
+  override implicit def patienceConfig = PatienceConfig(6 seconds, 100 millis)
 }
 
 object KeyValueStoreSpec {
