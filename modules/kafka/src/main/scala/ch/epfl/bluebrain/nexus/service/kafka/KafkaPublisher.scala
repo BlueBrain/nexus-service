@@ -32,7 +32,7 @@ class KafkaPublisher[Event: Encoder: Key](producer: KafkaProducer[String, String
     * @return the metadata for the record acknowledge by the server
     */
   def send(event: Event): Future[RecordMetadata] = {
-    val message = new ProducerRecord[String, String](topic, event.key, event.asJson.noSpaces)
+    val message = new ProducerRecord[String, String](topic, event.toKey, event.asJson.noSpaces)
     producer.send(message)
   }
 }
@@ -45,7 +45,7 @@ object KafkaPublisher {
       .map {
         case OffsetEvts(off, events) =>
           events.map { event =>
-            Message(new ProducerRecord[String, String](topic, event.value.key, event.value.asJson.noSpaces), off)
+            Message(new ProducerRecord[String, String](topic, event.value.toKey, event.value.asJson.noSpaces), off)
           }
       }
       .flatMapConcat(Source.apply)
