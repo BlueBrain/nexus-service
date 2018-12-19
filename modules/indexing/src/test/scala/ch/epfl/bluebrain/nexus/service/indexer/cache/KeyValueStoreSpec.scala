@@ -79,13 +79,19 @@ class KeyValueStoreSpec
     }
 
     "update values computing from current value" in {
-      store.computeIfPresent("a", c => c.copy(c.rev + 1, c.value + "c")).ioValue
+      store.computeIfPresent("a", c => c.copy(c.rev + 1, c.value + "c")).ioValue shouldEqual
+        Option(RevisionedValue(3, "aac"))
       store.get("a").some shouldEqual RevisionedValue(3, "aac")
     }
 
-    "discard updates on computing value when new revision is not greated than current" in {
+    "discard updates on computing value when new revision is not greater than current" in {
       store.computeIfPresent("a", c => c.copy(c.rev, c.value + "d")).ioValue
       store.get("a").some shouldEqual RevisionedValue(3, "aac")
+    }
+
+    "discard updates on computing value when key does not exist" in {
+      store.computeIfPresent("c", c => c.copy(c.rev, c.value + "d")).ioValue shouldEqual None
+      store.get("c").ioValue shouldEqual None
     }
 
     "return empty entries" in {
