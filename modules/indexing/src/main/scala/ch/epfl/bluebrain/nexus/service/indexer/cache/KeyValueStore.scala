@@ -78,7 +78,7 @@ object KeyValueStore {
     * @param id     the ddata key
     * @param clock  a clock function that determines the next timestamp for a provided value
     * @param as     the implicitly underlying actor system
-    * @param config the key value stre configuration
+    * @param config the key value store configuration
     * @tparam F the effect type
     * @tparam K the key type
     * @tparam V the value type
