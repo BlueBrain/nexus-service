@@ -8,7 +8,7 @@ import akka.cluster.ddata.{DistributedData, LWWMap, LWWMapKey}
 import akka.pattern.ask
 import akka.util.Timeout
 import cats.Functor
-import cats.effect.{Async, IO}
+import cats.effect.{Async, IO, Timer}
 import cats.implicits._
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreError._
 import ch.epfl.bluebrain.nexus.sourcing.akka.RetryStrategy
@@ -75,24 +75,18 @@ object KeyValueStore {
     * Constructs a key value store backed by Akka Distributed Data with WriteAll and ReadLocal consistency
     * configuration. The store is backed by a LWWMap.
     *
-    * @param id                 the ddata key
-    * @param clock              a clock function that determines the next timestamp for a provided value
-    * @param askTimeout         the maximum amount of time to wait for a reply from the replicator
-    * @param consistencyTimeout the maximum amount of time to wait for a data write
-    * @param retryStrategy      the retry strategy to use in case of failures
-    * @param as                 the underlying actor system
-    * @tparam F                 the effect type
-    * @tparam K                 the key type
-    * @tparam V                 the value type
+    * @param id     the ddata key
+    * @param clock  a clock function that determines the next timestamp for a provided value
+    * @param as     the implicitly underlying actor system
+    * @param config the key value store configuration
+    * @tparam F the effect type
+    * @tparam K the key type
+    * @tparam V the value type
     */
-  final def distributed[F[_]: Async, K, V](
-      id: String,
-      clock: (Long, V) => Long,
-      askTimeout: FiniteDuration,
-      consistencyTimeout: FiniteDuration,
-      retryStrategy: RetryStrategy[F] = RetryStrategy.never
-  )(implicit as: ActorSystem): KeyValueStore[F, K, V] =
-    new DDataKeyValueStore(id, clock, askTimeout, consistencyTimeout, retryStrategy)
+  final def distributed[F[_]: Async: Timer, K, V](id: String, clock: (Long, V) => Long)(
+      implicit as: ActorSystem,
+      config: KeyValueStoreConfig): KeyValueStore[F, K, V] =
+    new DDataKeyValueStore(id, clock, config.askTimeout, config.consistencyTimeout, config.retryStrategy)
 
   private class DDataKeyValueStore[F[_]: Async, K, V](
       id: String,

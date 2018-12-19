@@ -1,10 +1,11 @@
 package ch.epfl.bluebrain.nexus.service.indexer.cache
 
 import cats.effect.IO
+import cats.effect.IO.timer
 import ch.epfl.bluebrain.nexus.commons.test.io.{IOEitherValues, IOOptionValues}
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSpec._
 import ch.epfl.bluebrain.nexus.service.test.ActorSystemFixture
-import ch.epfl.bluebrain.nexus.sourcing.akka.RetryStrategy
+import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
 import org.scalatest.Matchers
 
 import scala.concurrent.duration._
@@ -15,15 +16,14 @@ class KeyValueStoreSpec
     with IOEitherValues
     with IOOptionValues {
 
+  private implicit val ec = system.dispatcher
+
+  private implicit val t = timer(ec)
+
   "A KeyValueStore" should {
 
-    val store = KeyValueStore.distributed[IO, String, RevisionedValue[String]](
-      "spec",
-      { case (_, rv) => rv.rev },
-      3 seconds,
-      3 seconds,
-      RetryStrategy.never
-    )
+    implicit val config = KeyValueStoreConfig(4 seconds, 3 seconds, RetryStrategyConfig("never", 0 seconds, 0, 0))
+    val store           = KeyValueStore.distributed[IO, String, RevisionedValue[String]]("spec", { case (_, rv) => rv.rev })
 
     "store values" in {
       store.put("a", RevisionedValue(1, "a")).ioValue
@@ -69,15 +69,8 @@ class KeyValueStoreSpec
     }
 
     "return empty entries" in {
-      KeyValueStore
-        .distributed[IO, String, RevisionedValue[String]](
-          "empty", { case (_, rv) => rv.rev },
-          3 seconds,
-          3 seconds,
-          RetryStrategy.never
-        )
-        .entries()
-        .ioValue shouldEqual Map.empty[String, RevisionedValue[String]]
+      val store = KeyValueStore.distributed[IO, String, RevisionedValue[String]]("empty", { case (_, rv) => rv.rev })
+      store.entries().ioValue shouldEqual Map.empty[String, RevisionedValue[String]]
     }
 
   }
