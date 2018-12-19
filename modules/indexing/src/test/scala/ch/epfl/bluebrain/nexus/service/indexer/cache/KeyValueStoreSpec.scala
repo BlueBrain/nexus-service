@@ -78,6 +78,14 @@ class KeyValueStoreSpec
       store.findValue(_.value == "cc").ioValue.isEmpty shouldEqual true
     }
 
+    "return the matching and transformed (key, value)" in {
+      store.collectFirst { case (k, RevisionedValue(2, "aa")) => k }.some shouldEqual "a"
+    }
+
+    "fail to return the matching and transformed (key, value)" in {
+      store.collectFirst { case (k, RevisionedValue(4, "aa")) => k }.ioValue.isEmpty shouldEqual true
+    }
+
     "update values computing from current value" in {
       store.computeIfPresent("a", c => c.copy(c.rev + 1, c.value + "c")).ioValue shouldEqual
         Option(RevisionedValue(3, "aac"))

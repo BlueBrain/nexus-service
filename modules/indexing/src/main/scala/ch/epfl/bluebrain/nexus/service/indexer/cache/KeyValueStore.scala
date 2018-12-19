@@ -90,6 +90,16 @@ trait KeyValueStore[F[_], K, V] {
     entries().map(_.find { case (k, v) => f(k, v) })
 
   /**
+    * Finds the first (key, value) pair  for which the given partial function is defined,
+    * and applies the partial function to it.
+    *
+    * @param pf the partial function
+    * @return the first (key, value) pair that satisfies the predicate or None if none are found
+    */
+  def collectFirst[A](pf: PartialFunction[(K, V), A])(implicit F: Functor[F]): F[Option[A]] =
+    entries().map(_.collectFirst(pf))
+
+  /**
     * Finds the first value in the store that satisfies the predicate.
     *
     * @param f the predicate to the satisfied
