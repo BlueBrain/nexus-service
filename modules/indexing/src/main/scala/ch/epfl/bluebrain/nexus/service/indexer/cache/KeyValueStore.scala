@@ -65,20 +65,20 @@ trait KeyValueStore[F[_], K, V] {
   /**
     * @return all the entries in the store
     */
-  def entries(): F[Map[K, V]]
+  def entries: F[Map[K, V]]
 
   /**
     * @return a set of all the values in the store
     */
-  def values()(implicit F: Functor[F]): F[Set[V]] =
-    entries().map(_.values.toSet)
+  def values(implicit F: Functor[F]): F[Set[V]] =
+    entries.map(_.values.toSet)
 
   /**
     * @param key the key
     * @return an optional value for the provided key
     */
   def get(key: K)(implicit F: Functor[F]): F[Option[V]] =
-    entries().map(_.get(key))
+    entries.map(_.get(key))
 
   /**
     * Finds the first (key, value) pair that satisfies the predicate.
@@ -87,7 +87,7 @@ trait KeyValueStore[F[_], K, V] {
     * @return the first (key, value) pair that satisfies the predicate or None if none are found
     */
   def find(f: (K, V) => Boolean)(implicit F: Functor[F]): F[Option[(K, V)]] =
-    entries().map(_.find { case (k, v) => f(k, v) })
+    entries.map(_.find { case (k, v) => f(k, v) })
 
   /**
     * Finds the first (key, value) pair  for which the given partial function is defined,
@@ -97,7 +97,7 @@ trait KeyValueStore[F[_], K, V] {
     * @return the first (key, value) pair that satisfies the predicate or None if none are found
     */
   def collectFirst[A](pf: PartialFunction[(K, V), A])(implicit F: Functor[F]): F[Option[A]] =
-    entries().map(_.collectFirst(pf))
+    entries.map(_.collectFirst(pf))
 
   /**
     * Finds the first value in the store that satisfies the predicate.
@@ -106,7 +106,7 @@ trait KeyValueStore[F[_], K, V] {
     * @return the first value that satisfies the predicate or None if none are found
     */
   def findValue(f: V => Boolean)(implicit F: Functor[F]): F[Option[V]] =
-    entries().map(_.find { case (_, v) => f(v) }.map { case (_, v) => v })
+    entries.map(_.find { case (_, v) => f(v) }.map { case (_, v) => v })
 }
 
 object KeyValueStore {
@@ -160,7 +160,7 @@ object KeyValueStore {
       retryStrategy(mappedFA)
     }
 
-    override def entries(): F[Map[K, V]] = {
+    override def entries: F[Map[K, V]] = {
       val msg    = Get(mapKey, ReadLocal)
       val future = IO(replicator ? msg)
       val fa     = IO.fromFuture(future).to[F]

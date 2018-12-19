@@ -52,14 +52,14 @@ class KeyValueStoreSpec
 
     "return all entries" in {
       store.putIfAbsent("b", RevisionedValue(1, "b")).ioValue
-      store.entries().ioValue shouldEqual Map(
+      store.entries.ioValue shouldEqual Map(
         "b" -> RevisionedValue(1, "b"),
         "a" -> RevisionedValue(2, "aa")
       )
     }
 
     "return all values" in {
-      store.values().ioValue shouldEqual Set(RevisionedValue(1, "b"), RevisionedValue(2, "aa"))
+      store.values.ioValue shouldEqual Set(RevisionedValue(1, "b"), RevisionedValue(2, "aa"))
     }
 
     "return a matching (key, value)" in {
@@ -104,7 +104,7 @@ class KeyValueStoreSpec
 
     "return empty entries" in {
       val store = KeyValueStore.distributed[IO, String, RevisionedValue[String]]("empty", { case (_, rv) => rv.rev })
-      store.entries().ioValue shouldEqual Map.empty[String, RevisionedValue[String]]
+      store.entries.ioValue shouldEqual Map.empty[String, RevisionedValue[String]]
     }
 
   }
