@@ -36,6 +36,7 @@ val circeVersion                    = "0.10.1"
 val commonsVersion                  = "0.10.41"
 val journalVersion                  = "3.0.19"
 val monixVersion                    = "3.0.0-RC2"
+val pureconfigVersion               = "0.9.2"
 val scalaTestVersion                = "3.0.5"
 val shapelessVersion                = "2.3.3"
 val sourcingVersion                 = "0.12.2"
@@ -68,6 +69,7 @@ lazy val commonsTypes       = "ch.epfl.bluebrain.nexus" %% "commons-types"      
 lazy val commonsHttp        = "ch.epfl.bluebrain.nexus" %% "commons-http"         % commonsVersion
 lazy val journal            = "io.verizon.journal"      %% "core"                 % journalVersion
 lazy val monixEval          = "io.monix"                %% "monix-eval"           % monixVersion
+lazy val pureconfig         = "com.github.pureconfig"   %% "pureconfig"           % pureconfigVersion
 lazy val shapeless          = "com.chuusai"             %% "shapeless"            % shapelessVersion
 lazy val sourcingAkka       = "ch.epfl.bluebrain.nexus" %% "sourcing-akka"        % sourcingVersion
 
@@ -137,6 +139,7 @@ lazy val indexing = project
       akkaSlf4j               % Test,
       circeGenericExtras      % Test,
       commonsTest             % Test,
+      pureconfig              % Test,
       scalaTest               % Test,
     )
   )
