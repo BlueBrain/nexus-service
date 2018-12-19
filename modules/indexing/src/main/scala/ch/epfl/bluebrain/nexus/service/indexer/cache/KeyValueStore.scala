@@ -7,7 +7,7 @@ import akka.cluster.ddata.Replicator._
 import akka.cluster.ddata.{DistributedData, LWWMap, LWWMapKey}
 import akka.pattern.ask
 import akka.util.Timeout
-import cats.Functor
+import cats.{Functor, Monad}
 import cats.effect.{Async, IO, Timer}
 import cats.implicits._
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreError._
@@ -31,6 +31,36 @@ trait KeyValueStore[F[_], K, V] {
     * @param value the value stored
     */
   def put(key: K, value: V): F[Unit]
+
+  /**
+    * Adds the (key, value) to the store only if the key does not exists.
+    *
+    * @param key   the key under which the value is stored
+    * @param value the value stored
+    * @return true if the value was added, false otherwise. The response is wrapped on the effect type ''F[_]''
+    */
+  def putIfAbsent(key: K, value: V)(implicit F: Monad[F]): F[Boolean] =
+    get(key).flatMap {
+      case Some(_) => F.pure(false)
+      case _       => put(key, value).map(_ => true)
+    }
+
+  /**
+    * If the value for the specified key is present, attempts to compute a new mapping given the key and its current mapped value.
+    *
+    * @param key the key under which the value is stored
+    * @param f   the function to compute a value
+    * @return None wrapped on the effect type ''F[_]'' if the value does not exist for the given key.
+    *         Some(value) wrapped on the effect type ''F[_]''
+    *         where value is the result of computing the provided f function on the current value of the provided key
+    */
+  def computeIfPresent(key: K, f: V => V)(implicit F: Monad[F]): F[Option[V]] =
+    get(key).flatMap {
+      case Some(value) =>
+        val computedValue = f(value)
+        put(key, computedValue).map(_ => Some(computedValue))
+      case other => F.pure(other)
+    }
 
   /**
     * @return all the entries in the store

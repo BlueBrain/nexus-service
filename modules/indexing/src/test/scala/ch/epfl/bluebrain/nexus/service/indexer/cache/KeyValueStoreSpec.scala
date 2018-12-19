@@ -40,8 +40,18 @@ class KeyValueStoreSpec
       store.get("a").some shouldEqual RevisionedValue(2, "aa")
     }
 
+    "discard updates for same revisions" in {
+      store.put("a", RevisionedValue(2, "b")).ioValue
+      store.get("a").some shouldEqual RevisionedValue(2, "aa")
+    }
+
+    "discard updates on present keys" in {
+      store.putIfAbsent("a", RevisionedValue(4, "b")).ioValue shouldEqual false
+      store.get("a").some shouldEqual RevisionedValue(2, "aa")
+    }
+
     "return all entries" in {
-      store.put("b", RevisionedValue(1, "b")).ioValue
+      store.putIfAbsent("b", RevisionedValue(1, "b")).ioValue
       store.entries().ioValue shouldEqual Map(
         "b" -> RevisionedValue(1, "b"),
         "a" -> RevisionedValue(2, "aa")
@@ -66,6 +76,16 @@ class KeyValueStoreSpec
 
     "fail to return a matching value" in {
       store.findValue(_.value == "cc").ioValue.isEmpty shouldEqual true
+    }
+
+    "update values computing from current value" in {
+      store.computeIfPresent("a", c => c.copy(c.rev + 1, c.value + "c")).ioValue
+      store.get("a").some shouldEqual RevisionedValue(3, "aac")
+    }
+
+    "discard updates on computing value when new revision is not greated than current" in {
+      store.computeIfPresent("a", c => c.copy(c.rev, c.value + "d")).ioValue
+      store.get("a").some shouldEqual RevisionedValue(3, "aac")
     }
 
     "return empty entries" in {
