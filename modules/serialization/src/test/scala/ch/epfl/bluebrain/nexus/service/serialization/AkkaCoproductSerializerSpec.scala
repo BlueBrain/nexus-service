@@ -12,14 +12,16 @@ import shapeless._
 class AkkaCoproductSerializerSpec extends WordSpecLike with Matchers with Inspectors {
 
   "An AkkaCoproductSerializer" when {
-    val ser           = new EventSerializer
-    val UTF8: Charset = Charset.forName("UTF-8")
+    val ser  = new EventSerializer
+    val UTF8 = Charset.forName("UTF-8")
+
     "computing a manifest" should {
       "provide the correct type" in {
         val mapping = Map[AnyRef, String](Event.Zero -> "Event",
-                                          Event.One(12)           -> "Event",
-                                          Event.Two(12, "twelve") -> "Event",
-                                          TheCommand(12)          -> "Command")
+                                          Event.One(12)                 -> "Event",
+                                          Event.Two(12, Some("twelve")) -> "Event",
+                                          Event.Two(12, None)           -> "Event",
+                                          TheCommand(12)                -> "Command")
 
         forAll(mapping.toList) {
           case (data, manifest) =>
@@ -35,10 +37,11 @@ class AkkaCoproductSerializerSpec extends WordSpecLike with Matchers with Inspec
     "encoding to binary" should {
       "encode known events to UTF-8" in {
         val mapping = Map[AnyRef, String](
-          Event.Zero              -> """{"type":"Zero"}""",
-          Event.One(12)           -> """{"value":12,"type":"One"}""",
-          Event.Two(12, "twelve") -> """{"value":12,"text":"twelve","type":"Two"}""",
-          TheCommand(12)          -> """{"arg":12,"type":"TheCommand"}"""
+          Event.Zero                    -> """{"type":"Zero"}""",
+          Event.One(12)                 -> """{"value":12,"type":"One"}""",
+          Event.Two(12, Some("twelve")) -> """{"value":12,"text":"twelve","type":"Two"}""",
+          Event.Two(12, None)           -> """{"value":12,"type":"Two"}""",
+          TheCommand(12)                -> """{"arg":12,"type":"TheCommand"}"""
         )
 
         forAll(mapping.toList) {
@@ -56,7 +59,8 @@ class AkkaCoproductSerializerSpec extends WordSpecLike with Matchers with Inspec
         val mapping = Map[(String, String), AnyRef](
           ("""{"type":"Zero"}""", "Event")                           -> Event.Zero,
           ("""{"value":12,"type":"One"}""", "Event")                 -> Event.One(12),
-          ("""{"value":12,"text":"twelve","type":"Two"}""", "Event") -> Event.Two(12, "twelve"),
+          ("""{"value":12,"text":"twelve","type":"Two"}""", "Event") -> Event.Two(12, Some("twelve")),
+          ("""{"value":12,"type":"Two"}""", "Event")                 -> Event.Two(12, None),
           ("""{"arg":12,"type":"TheCommand"}""", "Command")          -> TheCommand(12)
         )
 
@@ -82,9 +86,9 @@ object AkkaCoproductSerializerSpec {
 
   sealed trait Event extends Product with Serializable
   object Event {
-    final case object Zero                         extends Event
-    final case class One(value: Int)               extends Event
-    final case class Two(value: Int, text: String) extends Event
+    final case object Zero                                 extends Event
+    final case class One(value: Int)                       extends Event
+    final case class Two(value: Int, text: Option[String]) extends Event
   }
 
   sealed trait Command extends Product with Serializable

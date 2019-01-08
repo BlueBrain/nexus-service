@@ -1,9 +1,9 @@
 package ch.epfl.bluebrain.nexus.service.serialization
 
-import java.nio.charset.Charset
+import java.nio.charset.StandardCharsets.UTF_8
 
 import io.circe.parser.decode
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, Encoder, Printer}
 import shapeless._
 
 /**
@@ -48,7 +48,7 @@ trait CoproductSerializer[C <: Coproduct] {
 
 object CoproductSerializer {
 
-  private final val UTF8: Charset = Charset.forName("UTF-8")
+  private val printer = Printer.noSpaces.copy(dropNullValues = true)
 
   /**
     * Summons a serializer instance from the implicit scope.
@@ -96,12 +96,12 @@ object CoproductSerializer {
     override def toBinary(x: Any): Option[Array[Byte]] =
       headTypeable
         .cast(x)
-        .map(h => headEncoder(h).noSpaces.getBytes(UTF8))
+        .map(h => headEncoder(h).pretty(printer).getBytes(UTF_8))
         .orElse(tailSerializer.toBinary(x))
 
     override def fromBinary(bytes: Array[Byte], manifest: String): Option[H :+: T] =
       if (headTypeable.describe == manifest) {
-        decode[H](new String(bytes, UTF8)) match {
+        decode[H](new String(bytes, UTF_8)) match {
           case Left(_)      => None
           case Right(value) => Some(Coproduct(value))
         }
