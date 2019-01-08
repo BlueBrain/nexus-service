@@ -7,6 +7,7 @@ import akka.testkit.TestKit
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{Matchers, OptionValues, WordSpecLike}
+import pureconfig.generic.auto._
 import pureconfig.loadConfigOrThrow
 
 import scala.concurrent.duration._
