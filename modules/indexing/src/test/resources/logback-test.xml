@@ -16,5 +16,6 @@
     <logger name="akka.remote" level="WARN" />
     <logger name="akka.cluster" level="WARN" />
     <logger name="es.weso.shacl" level="WARN" />
+    <logger name="akka.util.ManifestInfo" level="ERROR" />
 
 </configuration>
