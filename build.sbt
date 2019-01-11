@@ -25,7 +25,7 @@ scalafmt: {
  */
 
 val akkaVersion                     = "2.5.19"
-val akkaHttpVersion                 = "10.1.5"
+val akkaHttpVersion                 = "10.1.7"
 val akkaHttpCirceVersion            = "1.23.0"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
 val akkaPersistenceCassandraVersion = "0.92"
@@ -76,7 +76,7 @@ lazy val sourcingAkka       = "ch.epfl.bluebrain.nexus" %% "sourcing-akka"      
 lazy val kamonCore       = "io.kamon" %% "kamon-core"            % "1.1.4"
 lazy val kamonPrometheus = "io.kamon" %% "kamon-prometheus"      % "1.1.1"
 lazy val kamonJaeger     = "io.kamon" %% "kamon-jaeger"          % "1.0.2"
-lazy val kamonLogback    = "io.kamon" %% "kamon-logback"         % "1.0.4"
+lazy val kamonLogback    = "io.kamon" %% "kamon-logback"         % "1.0.5"
 lazy val kamonMetrics    = "io.kamon" %% "kamon-system-metrics"  % "1.0.0"
 lazy val kamonAkka       = "io.kamon" %% "kamon-akka-2.5"        % "1.1.3"
 lazy val kamonAkkaHttp   = "io.kamon" %% "kamon-akka-http-2.5"   % "1.1.1"
