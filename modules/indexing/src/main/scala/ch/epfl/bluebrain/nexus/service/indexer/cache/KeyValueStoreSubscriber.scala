@@ -1,6 +1,6 @@
 package ch.epfl.bluebrain.nexus.service.indexer.cache
 
-import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.cluster.ddata.LWWMapKey
 import akka.cluster.ddata.Replicator.Changed
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSubscriber.KeyValeStoreChange._
@@ -27,7 +27,7 @@ object OnKeyValueStoreChange {
   * @tparam K the key type
   * @tparam V the value type
   */
-class KeyValueStoreSubscriber[K, V] private (onChange: OnKeyValueStoreChange[K, V]) extends Actor {
+class KeyValueStoreSubscriber[K, V] private (onChange: OnKeyValueStoreChange[K, V]) extends Actor with ActorLogging {
 
   private val key      = LWWMapKey[K, V](self.path.name)
   private var previous = Map.empty[K, V]
@@ -48,12 +48,15 @@ class KeyValueStoreSubscriber[K, V] private (onChange: OnKeyValueStoreChange[K, 
 
   override def receive: Receive = {
     case c @ Changed(`key`) =>
-      val map     = c.get(key).entries
-      val changes = diff(map)
+      val recent  = c.get(key).entries
+      val changes = diff(recent)
       if (changes.values.nonEmpty) onChange(changes)
-      previous = map
+      previous = recent
+      log.debug("Received a Changed message from the key value store. Values changed: '{}'", changes)
 
-    case _ => // drop
+    case other =>
+      log.error("Skipping received a message different from Changed. Message: '{}'", other)
+
   }
 }
 
