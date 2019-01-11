@@ -25,7 +25,7 @@ scalafmt: {
  */
 
 val akkaVersion                     = "2.5.19"
-val akkaHttpVersion                 = "10.1.7"
+val akkaHttpVersion                 = "10.1.5"
 val akkaHttpCirceVersion            = "1.23.0"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
 val akkaPersistenceCassandraVersion = "0.92"
