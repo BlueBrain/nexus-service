@@ -7,9 +7,9 @@ import akka.cluster.ddata.Replicator._
 import akka.cluster.ddata.{DistributedData, LWWMap, LWWMapKey}
 import akka.pattern.ask
 import akka.util.Timeout
-import cats.{Functor, Monad}
 import cats.effect.{Async, IO, Timer}
 import cats.implicits._
+import cats.{Functor, Monad}
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreError._
 import ch.epfl.bluebrain.nexus.sourcing.akka.RetryStrategy
 
@@ -31,6 +31,13 @@ trait KeyValueStore[F[_], K, V] {
     * @param value the value stored
     */
   def put(key: K, value: V): F[Unit]
+
+  /**
+    * Deletes a key from the store.
+    *
+    * @param key the key to be deleted from the store
+    */
+  def remove(key: K): F[Unit]
 
   /**
     * Adds the (key, value) to the store only if the key does not exists.
@@ -107,6 +114,7 @@ trait KeyValueStore[F[_], K, V] {
     */
   def findValue(f: V => Boolean)(implicit F: Functor[F]): F[Option[V]] =
     entries.map(_.find { case (_, v) => f(v) }.map { case (_, v) => v })
+
 }
 
 object KeyValueStore {
@@ -115,25 +123,30 @@ object KeyValueStore {
     * Constructs a key value store backed by Akka Distributed Data with WriteAll and ReadLocal consistency
     * configuration. The store is backed by a LWWMap.
     *
-    * @param id     the ddata key
-    * @param clock  a clock function that determines the next timestamp for a provided value
-    * @param as     the implicitly underlying actor system
-    * @param config the key value store configuration
+    * @param id       the ddata key
+    * @param clock    a clock function that determines the next timestamp for a provided value
+    * @param onChange the method that gets triggered whenever a change to the key value store occurs
+    * @param as       the implicitly underlying actor system
+    * @param config   the key value store configuration
     * @tparam F the effect type
     * @tparam K the key type
     * @tparam V the value type
     */
-  final def distributed[F[_]: Async: Timer, K, V](id: String, clock: (Long, V) => Long)(
+  final def distributed[F[_]: Async: Timer, K, V](id: String,
+                                                  clock: (Long, V) => Long,
+                                                  onChange: OnKeyValueStoreChange[K, V] =
+                                                    OnKeyValueStoreChange.noEffect[K, V])(
       implicit as: ActorSystem,
       config: KeyValueStoreConfig): KeyValueStore[F, K, V] =
-    new DDataKeyValueStore(id, clock, config.askTimeout, config.consistencyTimeout, config.retryStrategy)
+    new DDataKeyValueStore(id, clock, config.askTimeout, config.consistencyTimeout, config.retryStrategy, onChange)
 
   private class DDataKeyValueStore[F[_]: Async, K, V](
       id: String,
       clock: (Long, V) => Long,
       askTimeout: FiniteDuration,
       consistencyTimeout: FiniteDuration,
-      retryStrategy: RetryStrategy[F]
+      retryStrategy: RetryStrategy[F],
+      onChange: OnKeyValueStoreChange[K, V]
   )(implicit as: ActorSystem)
       extends KeyValueStore[F, K, V] {
 
@@ -146,8 +159,25 @@ object KeyValueStore {
     private val mapKey                  = LWWMapKey[K, V](id)
     private val consistencyTimeoutError = ReadWriteConsistencyTimeout(consistencyTimeout)
 
+    private val subscriberActor = KeyValueStoreSubscriber(id, onChange)
+    replicator ! Subscribe(mapKey, subscriberActor)
+
     override def put(key: K, value: V): F[Unit] = {
       val msg    = Update(mapKey, LWWMap.empty[K, V], WriteAll(consistencyTimeout))(_.put(key, value))
+      val future = IO(replicator ? msg)
+      val fa     = IO.fromFuture(future).to[F]
+      val mappedFA = fa.flatMap[Unit] {
+        case _: UpdateSuccess[_] => F.unit
+        // $COVERAGE-OFF$
+        case _: UpdateTimeout[_] => F.raiseError(consistencyTimeoutError)
+        case _: UpdateFailure[_] => F.raiseError(DistributedDataError("Failed to distribute write"))
+        // $COVERAGE-ON$
+      }
+      retryStrategy(mappedFA)
+    }
+
+    override def remove(key: K) = {
+      val msg    = Update(mapKey, LWWMap.empty[K, V], WriteAll(consistencyTimeout))(_.remove(node, key))
       val future = IO(replicator ? msg)
       val fa     = IO.fromFuture(future).to[F]
       val mappedFA = fa.flatMap[Unit] {

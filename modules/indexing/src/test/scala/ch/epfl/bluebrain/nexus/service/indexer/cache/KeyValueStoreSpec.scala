@@ -4,9 +4,13 @@ import cats.effect.IO
 import cats.effect.IO.timer
 import ch.epfl.bluebrain.nexus.commons.test.io.{IOEitherValues, IOOptionValues}
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSpec._
+import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSubscriber.KeyValueStoreChange._
+import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSubscriber.KeyValueStoreChanges
 import ch.epfl.bluebrain.nexus.service.test.ActorSystemFixture
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
 import org.scalatest.Matchers
+import org.scalatest.concurrent.Eventually
+import collection.mutable.{Set => SetBuffer}
 
 import scala.concurrent.duration._
 
@@ -14,7 +18,8 @@ class KeyValueStoreSpec
     extends ActorSystemFixture("KeyValueStoreSpec", true)
     with Matchers
     with IOEitherValues
-    with IOOptionValues {
+    with IOOptionValues
+    with Eventually {
 
   private implicit val ec = system.dispatcher
 
@@ -22,11 +27,30 @@ class KeyValueStoreSpec
 
   "A KeyValueStore" should {
 
+    val expectedChanges = Set[KeyValueStoreChanges[String, RevisionedValue[String]]](
+      KeyValueStoreChanges(Set(ValueAdded("a", RevisionedValue(1, "a")))),
+      KeyValueStoreChanges(Set(ValueModified("a", RevisionedValue(2, "aa")))),
+      KeyValueStoreChanges(Set(ValueAdded("b", RevisionedValue(1, "b")))),
+      KeyValueStoreChanges(Set(ValueModified("a", RevisionedValue(3, "aac")))),
+      KeyValueStoreChanges(Set(ValueRemoved("a", RevisionedValue(3, "aac"))))
+    )
+
+    val changes: SetBuffer[KeyValueStoreChanges[String, RevisionedValue[String]]] = SetBuffer.empty
+
+    val onChange: OnKeyValueStoreChange[String, RevisionedValue[String]] =
+      (value: KeyValueStoreChanges[String, RevisionedValue[String]]) => changes += value
+
     implicit val config = KeyValueStoreConfig(4 seconds, 3 seconds, RetryStrategyConfig("never", 0 seconds, 0, 0))
-    val store           = KeyValueStore.distributed[IO, String, RevisionedValue[String]]("spec", { case (_, rv) => rv.rev })
+    val store =
+      KeyValueStore.distributed[IO, String, RevisionedValue[String]]("spec", { case (_, rv) => rv.rev }, onChange)
 
     "store values" in {
       store.put("a", RevisionedValue(1, "a")).ioValue
+      store.get("a").some shouldEqual RevisionedValue(1, "a")
+    }
+
+    "discard updates for same revisions" in {
+      store.put("a", RevisionedValue(1, "b")).ioValue
       store.get("a").some shouldEqual RevisionedValue(1, "a")
     }
 
@@ -37,11 +61,6 @@ class KeyValueStoreSpec
 
     "discard updates for previous revisions" in {
       store.put("a", RevisionedValue(1, "a")).ioValue
-      store.get("a").some shouldEqual RevisionedValue(2, "aa")
-    }
-
-    "discard updates for same revisions" in {
-      store.put("a", RevisionedValue(2, "b")).ioValue
       store.get("a").some shouldEqual RevisionedValue(2, "aa")
     }
 
@@ -102,9 +121,18 @@ class KeyValueStoreSpec
       store.get("c").ioValue shouldEqual None
     }
 
+    "remove a key" in {
+      store.remove("a").ioValue
+      store.entries.ioValue shouldEqual Map("b" -> RevisionedValue(1, "b"))
+    }
+
     "return empty entries" in {
       val store = KeyValueStore.distributed[IO, String, RevisionedValue[String]]("empty", { case (_, rv) => rv.rev })
       store.entries.ioValue shouldEqual Map.empty[String, RevisionedValue[String]]
+    }
+
+    "verify subscriber changes" in eventually {
+      changes.toSet shouldEqual expectedChanges
     }
 
   }
