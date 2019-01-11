@@ -4,8 +4,8 @@ import cats.effect.IO
 import cats.effect.IO.timer
 import ch.epfl.bluebrain.nexus.commons.test.io.{IOEitherValues, IOOptionValues}
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSpec._
-import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSubscriber.KeyValeStoreChange._
-import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSubscriber.KeyValeStoreChanges
+import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSubscriber.KeyValueStoreChange._
+import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSubscriber.KeyValueStoreChanges
 import ch.epfl.bluebrain.nexus.service.test.ActorSystemFixture
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
 import org.scalatest.Matchers
@@ -27,18 +27,18 @@ class KeyValueStoreSpec
 
   "A KeyValueStore" should {
 
-    val expectedChanges = Set[KeyValeStoreChanges[String, RevisionedValue[String]]](
-      KeyValeStoreChanges(Set(ValueAdded("a", RevisionedValue(1, "a")))),
-      KeyValeStoreChanges(Set(ValueModified("a", RevisionedValue(2, "aa")))),
-      KeyValeStoreChanges(Set(ValueAdded("b", RevisionedValue(1, "b")))),
-      KeyValeStoreChanges(Set(ValueModified("a", RevisionedValue(3, "aac")))),
-      KeyValeStoreChanges(Set(ValueRemoved("a", RevisionedValue(3, "aac"))))
+    val expectedChanges = Set[KeyValueStoreChanges[String, RevisionedValue[String]]](
+      KeyValueStoreChanges(Set(ValueAdded("a", RevisionedValue(1, "a")))),
+      KeyValueStoreChanges(Set(ValueModified("a", RevisionedValue(2, "aa")))),
+      KeyValueStoreChanges(Set(ValueAdded("b", RevisionedValue(1, "b")))),
+      KeyValueStoreChanges(Set(ValueModified("a", RevisionedValue(3, "aac")))),
+      KeyValueStoreChanges(Set(ValueRemoved("a", RevisionedValue(3, "aac"))))
     )
 
-    val changes: SetBuffer[KeyValeStoreChanges[String, RevisionedValue[String]]] = SetBuffer.empty
+    val changes: SetBuffer[KeyValueStoreChanges[String, RevisionedValue[String]]] = SetBuffer.empty
 
     val onChange: OnKeyValueStoreChange[String, RevisionedValue[String]] =
-      (value: KeyValeStoreChanges[String, RevisionedValue[String]]) => changes += value
+      (value: KeyValueStoreChanges[String, RevisionedValue[String]]) => changes += value
 
     implicit val config = KeyValueStoreConfig(4 seconds, 3 seconds, RetryStrategyConfig("never", 0 seconds, 0, 0))
     val store =
