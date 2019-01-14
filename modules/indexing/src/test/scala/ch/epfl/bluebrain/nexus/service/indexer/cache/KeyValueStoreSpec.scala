@@ -1,8 +1,10 @@
 package ch.epfl.bluebrain.nexus.service.indexer.cache
 
+import akka.testkit.TestProbe
 import cats.effect.IO
 import cats.effect.IO.timer
 import ch.epfl.bluebrain.nexus.commons.test.io.{IOEitherValues, IOOptionValues}
+import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStore.Subscription
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSpec._
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSubscriber.KeyValueStoreChange._
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreSubscriber.KeyValueStoreChanges
@@ -10,8 +12,8 @@ import ch.epfl.bluebrain.nexus.service.test.ActorSystemFixture
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
 import org.scalatest.Matchers
 import org.scalatest.concurrent.Eventually
-import collection.mutable.{Set => SetBuffer}
 
+import scala.collection.mutable.{Set => SetBuffer}
 import scala.concurrent.duration._
 
 class KeyValueStoreSpec
@@ -42,7 +44,15 @@ class KeyValueStoreSpec
 
     implicit val config = KeyValueStoreConfig(4 seconds, 3 seconds, RetryStrategyConfig("never", 0 seconds, 0, 0))
     val store =
-      KeyValueStore.distributed[IO, String, RevisionedValue[String]]("spec", { case (_, rv) => rv.rev }, onChange)
+      KeyValueStore.distributed[IO, String, RevisionedValue[String]]("spec", { case (_, rv) => rv.rev })
+
+    var subscription: Subscription = null
+    val probe                      = TestProbe()
+
+    "subscribe" in {
+      subscription = store.subscribe(onChange).ioValue
+      probe watch subscription.actorRef
+    }
 
     "store values" in {
       store.put("a", RevisionedValue(1, "a")).ioValue
@@ -133,6 +143,11 @@ class KeyValueStoreSpec
 
     "verify subscriber changes" in eventually {
       changes.toSet shouldEqual expectedChanges
+    }
+
+    "unsubscribe" in {
+      store.unsubscribe(subscription).ioValue
+      probe.expectTerminated(subscription.actorRef)
     }
 
   }

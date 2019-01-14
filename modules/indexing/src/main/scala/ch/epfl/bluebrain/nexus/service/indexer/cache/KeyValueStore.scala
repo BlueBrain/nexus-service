@@ -1,6 +1,6 @@
 package ch.epfl.bluebrain.nexus.service.indexer.cache
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem}
 import akka.cluster.Cluster
 import akka.cluster.ddata.LWWRegister.Clock
 import akka.cluster.ddata.Replicator._
@@ -10,6 +10,7 @@ import akka.util.Timeout
 import cats.effect.{Async, IO, Timer}
 import cats.implicits._
 import cats.{Functor, Monad}
+import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStore.Subscription
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreError._
 import ch.epfl.bluebrain.nexus.sourcing.akka.RetryStrategy
 
@@ -115,9 +116,30 @@ trait KeyValueStore[F[_], K, V] {
   def findValue(f: V => Boolean)(implicit F: Functor[F]): F[Option[V]] =
     entries.map(_.find { case (_, v) => f(v) }.map { case (_, v) => v })
 
+  /**
+    * Adds a subscription to the cache
+    *
+    * @param value the method that gets triggered when a change to key value store occurs
+    */
+  def subscribe(value: OnKeyValueStoreChange[K, V]): F[Subscription]
+
+  /**
+    * Removes a subscription from the cache
+    *
+    * @param subscription the subscription to be removed
+    */
+  def unsubscribe(subscription: Subscription): F[Unit]
+
 }
 
 object KeyValueStore {
+
+  /**
+    * A subscription reference
+    *
+    * @param actorRef the underlying actor which handles the subscription messages
+    */
+  final case class Subscription(actorRef: ActorRef)
 
   /**
     * Constructs a key value store backed by Akka Distributed Data with WriteAll and ReadLocal consistency
@@ -125,28 +147,23 @@ object KeyValueStore {
     *
     * @param id       the ddata key
     * @param clock    a clock function that determines the next timestamp for a provided value
-    * @param onChange the method that gets triggered whenever a change to the key value store occurs
     * @param as       the implicitly underlying actor system
     * @param config   the key value store configuration
     * @tparam F the effect type
     * @tparam K the key type
     * @tparam V the value type
     */
-  final def distributed[F[_]: Async: Timer, K, V](id: String,
-                                                  clock: (Long, V) => Long,
-                                                  onChange: OnKeyValueStoreChange[K, V] =
-                                                    OnKeyValueStoreChange.noEffect[K, V])(
+  final def distributed[F[_]: Async: Timer, K, V](id: String, clock: (Long, V) => Long)(
       implicit as: ActorSystem,
       config: KeyValueStoreConfig): KeyValueStore[F, K, V] =
-    new DDataKeyValueStore(id, clock, config.askTimeout, config.consistencyTimeout, config.retryStrategy, onChange)
+    new DDataKeyValueStore(id, clock, config.askTimeout, config.consistencyTimeout, config.retryStrategy)
 
   private class DDataKeyValueStore[F[_]: Async, K, V](
       id: String,
       clock: (Long, V) => Long,
       askTimeout: FiniteDuration,
       consistencyTimeout: FiniteDuration,
-      retryStrategy: RetryStrategy[F],
-      onChange: OnKeyValueStoreChange[K, V]
+      retryStrategy: RetryStrategy[F]
   )(implicit as: ActorSystem)
       extends KeyValueStore[F, K, V] {
 
@@ -159,8 +176,17 @@ object KeyValueStore {
     private val mapKey                  = LWWMapKey[K, V](id)
     private val consistencyTimeoutError = ReadWriteConsistencyTimeout(consistencyTimeout)
 
-    private val subscriberActor = KeyValueStoreSubscriber(id, onChange)
-    replicator ! Subscribe(mapKey, subscriberActor)
+    override def subscribe(value: OnKeyValueStoreChange[K, V]): F[Subscription] = {
+      val subscriberActor = KeyValueStoreSubscriber(mapKey, value)
+      replicator ! Subscribe(mapKey, subscriberActor)
+      F.pure(Subscription(subscriberActor))
+    }
+
+    override def unsubscribe(subscription: Subscription): F[Unit] = {
+      replicator ! Unsubscribe(mapKey, subscription.actorRef)
+      as.stop(subscription.actorRef)
+      F.unit
+    }
 
     override def put(key: K, value: V): F[Unit] = {
       val msg    = Update(mapKey, LWWMap.empty[K, V], WriteAll(consistencyTimeout))(_.put(key, value))
