@@ -1,5 +1,7 @@
 package ch.epfl.bluebrain.nexus.service.indexer.cache
 
+import java.util.UUID
+
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.cluster.ddata.LWWMapKey
 import akka.cluster.ddata.Replicator.Changed
@@ -30,13 +32,15 @@ object OnKeyValueStoreChange {
 /**
   * A subscriber actor that receives messages from the key value store whenever a change occurs.
   *
+  * @param key      the cache map key
   * @param onChange the method that gets triggered when a change to key value store occurs
   * @tparam K the key type
   * @tparam V the value type
   */
-class KeyValueStoreSubscriber[K, V] private (onChange: OnKeyValueStoreChange[K, V]) extends Actor with ActorLogging {
+class KeyValueStoreSubscriber[K, V] private (key: LWWMapKey[K, V], onChange: OnKeyValueStoreChange[K, V])
+    extends Actor
+    with ActorLogging {
 
-  private val key      = LWWMapKey[K, V](self.path.name)
   private var previous = Map.empty[K, V]
 
   private def diff(recent: Map[K, V]): KeyValueStoreChanges[K, V] = {
@@ -110,12 +114,13 @@ object KeyValueStoreSubscriber {
   /**
     * Constructs the [[KeyValueStoreSubscriber]] actor.
     *
-    * @param id       the ddata key
+    * @param mapKey   the actor identifier
     * @param onChange the method that gets triggered whenever a change to the key value store occurs
     * @tparam K the key type
     * @tparam V the value type
     * @return an [[ActorRef]] of the [[KeyValueStoreSubscriber]] actor
     */
-  final def apply[K, V](id: String, onChange: OnKeyValueStoreChange[K, V])(implicit as: ActorSystem): ActorRef =
-    as.actorOf(Props(new KeyValueStoreSubscriber(onChange)), id)
+  final def apply[K, V](mapKey: LWWMapKey[K, V], onChange: OnKeyValueStoreChange[K, V])(
+      implicit as: ActorSystem): ActorRef =
+    as.actorOf(Props(new KeyValueStoreSubscriber(mapKey, onChange)), UUID.randomUUID().toString)
 }
