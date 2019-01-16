@@ -35,9 +35,9 @@ object RejectionHandling {
     *
     * @param m a value to be marshalled into an HttpResponse
     */
-  final def rejectRequestEntityAndComplete(m: ⇒ ToResponseMarshallable): Route = {
-    extractRequest { request ⇒
-      extractMaterializer { implicit mat ⇒
+  final def rejectRequestEntityAndComplete(m: => ToResponseMarshallable): Route = {
+    extractRequest { request =>
+      extractMaterializer { implicit mat =>
         request.discardEntityBytes()
         complete(m)
       }
@@ -82,141 +82,142 @@ object RejectionHandling {
     implicit val errorMarshaller: ToEntityMarshaller[Error] = J.compose(_.asJson)
     RejectionHandler
       .newBuilder()
-      .handleAll[SchemeRejection] { rejections ⇒
+      .handleAll[SchemeRejection] { rejections =>
         val schemes = rejections.map(_.supported).mkString("'", "', '", "'")
         val e       = Error("UriSchemeNotAllowed", s"Uri scheme not allowed, supported schemes: $schemes.")
         rejectRequestEntityAndComplete(BadRequest -> e)
       }
-      .handleAll[MethodRejection] { rejections ⇒
-        val (methods, names) = rejections.map(r ⇒ r.supported → r.supported.name).unzip
+      .handleAll[MethodRejection] { rejections =>
+        val (methods, names) = rejections.map(r => r.supported → r.supported.name).unzip
         val namesString      = names.mkString("'", "', '", "'")
         val e                = Error("HttpMethodNotAllowed", s"HTTP method not allowed, supported methods: $namesString.")
         rejectRequestEntityAndComplete((MethodNotAllowed, List(Allow(methods)), e))
       }
       .handle {
-        case AuthorizationFailedRejection ⇒
+        case AuthorizationFailedRejection =>
           val e = Error("AuthorizationFailed", "The supplied authentication is not authorized to access this resource.")
           rejectRequestEntityAndComplete(Forbidden -> e)
       }
       .handle {
-        case MalformedFormFieldRejection(name, msg, _) ⇒
+        case MalformedFormFieldRejection(name, msg, _) =>
           val e = Error("MalformedFormField", s"The form field '$name' was malformed: '$msg'.")
           rejectRequestEntityAndComplete(BadRequest -> e)
       }
       .handle {
-        case MalformedHeaderRejection(name, msg, _) ⇒
+        case MalformedHeaderRejection(name, msg, _) =>
           val e = Error("MalformedHeader", s"The value of HTTP header '$name' was malformed: '$msg'.")
           rejectRequestEntityAndComplete(BadRequest -> e)
       }
       .handle {
-        case MalformedQueryParamRejection(name, msg, _) ⇒
+        case MalformedQueryParamRejection(name, msg, _) =>
           val e = Error("MalformedQueryParam", s"The query parameter '$name' was malformed: '$msg'.")
           rejectRequestEntityAndComplete(BadRequest -> e)
       }
       .handle {
-        case MalformedRequestContentRejection(msg, throwable) ⇒
+        case MalformedRequestContentRejection(msg, throwable) =>
           val e = Error("MalformedRequestContent", s"The request content was malformed: '$msg'.")
           val status = throwable match {
-            case _: EntityStreamSizeException ⇒ RequestEntityTooLarge
-            case _                            ⇒ BadRequest
+            case _: EntityStreamSizeException => RequestEntityTooLarge
+            case _                            => BadRequest
           }
           rejectRequestEntityAndComplete(status -> e)
       }
       .handle {
-        case MissingCookieRejection(cookieName) ⇒
+        case MissingCookieRejection(cookieName) =>
           val e = Error("MissingCookie", s"Request is missing required cookie '$cookieName'.")
           rejectRequestEntityAndComplete(BadRequest -> e)
       }
       .handle {
-        case MissingFormFieldRejection(fieldName) ⇒
+        case MissingFormFieldRejection(fieldName) =>
           val e = Error("MissingFormField", s"Request is missing required form field '$fieldName'.")
           rejectRequestEntityAndComplete(BadRequest -> e)
       }
       .handle {
-        case MissingHeaderRejection(headerName) ⇒
+        case MissingHeaderRejection(headerName) =>
           val e = Error("MissingHeader", s"Request is missing required HTTP header '$headerName'.")
           rejectRequestEntityAndComplete(BadRequest -> e)
       }
       .handle {
-        case InvalidOriginRejection(allowedOrigins) ⇒
+        case InvalidOriginRejection(allowedOrigins) =>
           val e =
             Error("InvalidOrigin", s"Allowed `Origin` header values: ${allowedOrigins.mkString("'", "', '", "'")}")
           rejectRequestEntityAndComplete(Forbidden -> e)
       }
       .handle {
-        case MissingQueryParamRejection(paramName) ⇒
+        case MissingQueryParamRejection(paramName) =>
           val e = Error("MissingQueryParam", s"Request is missing required query parameter '$paramName'.")
           rejectRequestEntityAndComplete(BadRequest -> e)
       }
       .handle {
-        case InvalidRequiredValueForQueryParamRejection(paramName, requiredValue, _) ⇒
+        case InvalidRequiredValueForQueryParamRejection(paramName, requiredValue, _) =>
           val reason = s"Request is missing required value '$requiredValue' for query parameter '$paramName'."
           val e      = Error("InvalidRequiredValueForQueryParam", reason)
           rejectRequestEntityAndComplete(BadRequest -> e)
       }
       .handle {
-        case RequestEntityExpectedRejection ⇒
+        case RequestEntityExpectedRejection =>
           val e = Error("RequestEntityExpected", "Request entity expected but not supplied.")
           rejectRequestEntityAndComplete(BadRequest -> e)
       }
       .handle {
-        case TooManyRangesRejection(_) ⇒
+        case TooManyRangesRejection(_) =>
           val e = Error("TooManyRanges", "Request contains too many ranges.")
           rejectRequestEntityAndComplete(RequestedRangeNotSatisfiable -> e)
       }
       .handle {
-        case CircuitBreakerOpenRejection(_) ⇒
+        case CircuitBreakerOpenRejection(_) =>
           val e = Error("ServiceUnavailable", "The service is unavailable at this time.")
           rejectRequestEntityAndComplete(ServiceUnavailable -> e)
       }
       .handle {
-        case UnsatisfiableRangeRejection(unsatisfiableRanges, actualEntityLength) ⇒
+        case UnsatisfiableRangeRejection(unsatisfiableRanges, actualEntityLength) =>
           val ranges = unsatisfiableRanges.mkString("'", "', '", "'")
           val reason =
             s"None of the following requested Ranges were satisfiable for actual entity length '$actualEntityLength': $ranges"
           val e = Error("UnsatisfiableRange", reason)
           rejectRequestEntityAndComplete(RequestedRangeNotSatisfiable -> e)
       }
-      .handleAll[AuthenticationFailedRejection] { rejections ⇒
-        val reason = rejections.head.cause match {
-          case CredentialsMissing  ⇒ "The resource requires authentication, which was not supplied with the request."
-          case CredentialsRejected ⇒ "The supplied authentication is invalid."
+      .handleAll[AuthenticationFailedRejection] { rejections =>
+        val reason = rejections.headOption.map(_.cause) match {
+          case Some(CredentialsMissing) =>
+            "The resource requires authentication, which was not supplied with the request."
+          case _ => "The supplied authentication is invalid."
         }
         val e      = Error("AuthenticationFailed", reason)
         val header = `WWW-Authenticate`(HttpChallenges.oAuth2("*"))
         rejectRequestEntityAndComplete((Unauthorized, List(header), e))
       }
-      .handleAll[UnacceptedResponseContentTypeRejection] { rejections ⇒
+      .handleAll[UnacceptedResponseContentTypeRejection] { rejections =>
         val supported = rejections.flatMap(_.supported).map(_.format).mkString("'", "', '", "'")
         val reason    = s"Resource representation is only available with these types: $supported."
         val e         = Error("UnacceptedResponseContentType", reason)
         rejectRequestEntityAndComplete(NotAcceptable -> e)
       }
-      .handleAll[UnacceptedResponseEncodingRejection] { rejections ⇒
+      .handleAll[UnacceptedResponseEncodingRejection] { rejections =>
         val supported = rejections.flatMap(_.supported).map(_.value).mkString("'", "', '", "'")
         val reason    = s"Resource representation is only available with these Content-Encodings: $supported."
         val e         = Error("UnacceptedResponseEncoding", reason)
         rejectRequestEntityAndComplete(NotAcceptable -> e)
       }
-      .handleAll[UnsupportedRequestContentTypeRejection] { rejections ⇒
+      .handleAll[UnsupportedRequestContentTypeRejection] { rejections =>
         val supported = rejections.flatMap(_.supported).mkString("'", "' or '", "'")
         val reason    = s"The request's Content-Type is not supported. Expected: $supported."
         val e         = Error("UnsupportedRequestContentType", reason)
         rejectRequestEntityAndComplete(UnsupportedMediaType -> e)
       }
-      .handleAll[UnsupportedRequestEncodingRejection] { rejections ⇒
+      .handleAll[UnsupportedRequestEncodingRejection] { rejections =>
         val supported = rejections.map(_.supported.value).mkString("'", "' or '", "'")
         val reason    = s"The request's Content-Encoding is not supported. Expected: $supported."
         val e         = Error("UnsupportedRequestEncoding", reason)
         rejectRequestEntityAndComplete(BadRequest -> e)
       }
       .handle {
-        case ExpectedWebSocketRequestRejection ⇒
+        case ExpectedWebSocketRequestRejection =>
           val e = Error("ExpectedWebSocketRequest", "Expected WebSocket Upgrade request.")
           rejectRequestEntityAndComplete(BadRequest -> e)
       }
       .handle {
-        case ValidationRejection(msg, _) ⇒
+        case ValidationRejection(msg, _) =>
           val e = Error("ValidationRejection", msg)
           rejectRequestEntityAndComplete(BadRequest -> e)
       }
