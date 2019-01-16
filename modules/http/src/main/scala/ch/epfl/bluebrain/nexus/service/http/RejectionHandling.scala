@@ -4,7 +4,7 @@ import akka.http.scaladsl.marshalling.{ToEntityMarshaller, ToResponseMarshallabl
 import akka.http.scaladsl.model.EntityStreamSizeException
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.headers._
-import akka.http.scaladsl.server.AuthenticationFailedRejection.{CredentialsMissing, CredentialsRejected}
+import akka.http.scaladsl.server.AuthenticationFailedRejection.CredentialsMissing
 import akka.http.scaladsl.server.Directives.{complete, extractMaterializer, extractRequest}
 import akka.http.scaladsl.server._
 import io.circe.generic.semiauto._
