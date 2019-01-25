@@ -44,7 +44,8 @@ class KeyValueStoreSpec
 
     implicit val config = KeyValueStoreConfig(4 seconds, 3 seconds, RetryStrategyConfig("never", 0 seconds, 0, 0))
     val store =
-      KeyValueStore.distributed[IO, String, RevisionedValue[String]]("spec", { case (_, rv) => rv.rev })
+      KeyValueStore.distributed[IO, String, RevisionedValue[String], ErrorWrapper]("spec", { case (_, rv) => rv.rev },
+                                                                                   ErrorWrapper.apply(_))
 
     var subscription: Subscription = null
     val probe                      = TestProbe()
@@ -137,7 +138,9 @@ class KeyValueStoreSpec
     }
 
     "return empty entries" in {
-      val store = KeyValueStore.distributed[IO, String, RevisionedValue[String]]("empty", { case (_, rv) => rv.rev })
+      val store = KeyValueStore.distributed[IO, String, RevisionedValue[String], ErrorWrapper]("empty", {
+        case (_, rv) => rv.rev
+      }, ErrorWrapper(_))
       store.entries.ioValue shouldEqual Map.empty[String, RevisionedValue[String]]
     }
 
@@ -157,4 +160,5 @@ class KeyValueStoreSpec
 
 object KeyValueStoreSpec {
   final case class RevisionedValue[A](rev: Long, value: A)
+  final case class ErrorWrapper(err: KeyValueStoreError) extends Exception
 }

@@ -111,7 +111,9 @@ object SequentialTagIndexer {
     private lazy val projection = ResumableProjection(config.name)
 
     def prepareInit: () => Future[Offset] =
-      () => config.init().flatMap(_ => projection.fetchLatestOffset)
+      if (config.storage.restart)() => config.init().map(_ => NoOffset)
+      else
+        () => config.init().flatMap(_ => projection.fetchLatestOffset)
 
     private def toFlow: Graph[T] =
       config match {
