@@ -145,11 +145,11 @@ object KeyValueStore {
     * Constructs a key value store backed by Akka Distributed Data with WriteAll and ReadLocal consistency
     * configuration. The store is backed by a LWWMap.
     *
-    * @param id          the ddata key
-    * @param clock       a clock function that determines the next timestamp for a provided value
-    * @param handleError a function to convert ''KeyValueStoreError'' into ''E''
-    * @param as          the implicitly underlying actor system
-    * @param config      the key value store configuration
+    * @param id       the ddata key
+    * @param clock    a clock function that determines the next timestamp for a provided value
+    * @param mapError a function to convert ''KeyValueStoreError'' into ''E''
+    * @param as       the implicitly underlying actor system
+    * @param config   the key value store configuration
     * @tparam F the effect type
     * @tparam K the key type
     * @tparam E the error type
@@ -157,15 +157,15 @@ object KeyValueStore {
     */
   final def distributed[F[_]: Async: Timer, K, V, E <: Throwable](id: String,
                                                                   clock: (Long, V) => Long,
-                                                                  handleError: KeyValueStoreError => E)(
+                                                                  mapError: KeyValueStoreError => E)(
       implicit as: ActorSystem,
       config: KeyValueStoreConfig): KeyValueStore[F, K, V] =
-    new DDataKeyValueStore(id, clock, handleError, config.askTimeout, config.consistencyTimeout, config.retryStrategy)
+    new DDataKeyValueStore(id, clock, mapError, config.askTimeout, config.consistencyTimeout, config.retryStrategy)
 
   private class DDataKeyValueStore[F[_]: Async, K, V, E <: Throwable](
       id: String,
       clock: (Long, V) => Long,
-      handleError: KeyValueStoreError => E,
+      mapError: KeyValueStoreError => E,
       askTimeout: FiniteDuration,
       consistencyTimeout: FiniteDuration,
       retryStrategy: RetryStrategy[F]
@@ -200,8 +200,8 @@ object KeyValueStore {
       val mappedFA = fa.flatMap[Unit] {
         case _: UpdateSuccess[_] => F.unit
         // $COVERAGE-OFF$
-        case _: UpdateTimeout[_] => F.raiseError(handleError(consistencyTimeoutError))
-        case _: UpdateFailure[_] => F.raiseError(handleError(DistributedDataError("Failed to distribute write")))
+        case _: UpdateTimeout[_] => F.raiseError(mapError(consistencyTimeoutError))
+        case _: UpdateFailure[_] => F.raiseError(mapError(DistributedDataError("Failed to distribute write")))
         // $COVERAGE-ON$
       }
       retryStrategy(mappedFA)
@@ -214,8 +214,8 @@ object KeyValueStore {
       val mappedFA = fa.flatMap[Unit] {
         case _: UpdateSuccess[_] => F.unit
         // $COVERAGE-OFF$
-        case _: UpdateTimeout[_] => F.raiseError(handleError(consistencyTimeoutError))
-        case _: UpdateFailure[_] => F.raiseError(handleError(DistributedDataError("Failed to distribute write")))
+        case _: UpdateTimeout[_] => F.raiseError(mapError(consistencyTimeoutError))
+        case _: UpdateFailure[_] => F.raiseError(mapError(DistributedDataError("Failed to distribute write")))
         // $COVERAGE-ON$
       }
       retryStrategy(mappedFA)
@@ -229,7 +229,7 @@ object KeyValueStore {
         case g @ GetSuccess(`mapKey`, _) => F.pure(g.get(mapKey).entries)
         case _: NotFound[_]              => F.pure(Map.empty)
         // $COVERAGE-OFF$
-        case _: GetFailure[_] => F.raiseError(handleError(consistencyTimeoutError))
+        case _: GetFailure[_] => F.raiseError(mapError(consistencyTimeoutError))
         // $COVERAGE-ON$
       }
       retryStrategy(mappedFA)
