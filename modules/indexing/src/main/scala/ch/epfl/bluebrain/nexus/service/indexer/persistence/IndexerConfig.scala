@@ -28,6 +28,7 @@ sealed trait IndexerConfig[T, O] {
   def strategy: RetryStrategy
   def batch: Int
   def batchTo: FiniteDuration
+  def storage: O
 }
 
 /**
@@ -39,16 +40,19 @@ sealed trait OffsetStorage
 object OffsetStorage {
 
   /**
-    * The offset is persisted and the failures get logged
+    * The offset is persisted and the failures get logged.
+    *
+    * @param restart flag to control from where to start consuming messages on boot.
+    *                If set to true, it will start consuming messages from the beginning.
+    *                If set to false, it will attempt to resume from the previously stored offset (if any)
     */
-  final case object Persist extends OffsetStorage
+  final case class Persist(restart: Boolean) extends OffsetStorage
 
   /**
-    * The offset is NOT persisted and the failures do not get logged
+    * The offset is NOT persisted and the failures do not get logged.
     */
   final case object Volatile extends OffsetStorage
 
-  type Persist  = Persist.type
   type Volatile = Volatile.type
 }
 
@@ -58,7 +62,7 @@ object IndexerConfig {
   private sealed trait Ready
 
   @SuppressWarnings(Array("UnusedMethodParameter"))
-  private[IndexerConfig] final class IndexConfigBuilder[T, ST, SP, SN, SI, O <: OffsetStorage](
+  private[IndexerConfig] final case class IndexConfigBuilder[T, ST, SP, SN, SI, O <: OffsetStorage](
       tag: Option[String] = None,
       plugin: Option[String] = None,
       name: Option[String] = None,
@@ -67,47 +71,50 @@ object IndexerConfig {
       batch: Int = 1,
       batchTo: FiniteDuration = 50 millis,
       retries: Int = 1,
-      strategy: RetryStrategy = Linear(0 seconds)) {
+      strategy: RetryStrategy = Linear(0 seconds),
+      storage: O) {
 
     @silent
     def build(implicit e1: ST =:= Ready, e2: SP =:= Ready, e3: SN =:= Ready, e4: SI =:= Ready): IndexerConfig[T, O] =
       (tag, plugin, name, index) match {
         case (Some(t), Some(p), Some(n), Some(Right(flow))) =>
-          IndexConfigFlow[T, O](t, p, n, flow, init, batch, batchTo, retries, strategy)
+          IndexConfigFlow(t, p, n, flow, init, batch, batchTo, retries, strategy, storage)
         case (Some(t), Some(p), Some(n), Some(Left(i))) =>
-          IndexConfigFunction[T, O](t, p, n, i, init, batch, batchTo, retries, strategy)
+          IndexConfigFunction(t, p, n, i, init, batch, batchTo, retries, strategy, storage)
         case _ => throw new RuntimeException("Unexpected: some of the required fields are not set")
       }
 
     def tag(value: String): IndexConfigBuilder[T, Ready, SP, SN, SI, O] =
-      new IndexConfigBuilder(Some(value), plugin, name, index, init, batch, batchTo, retries, strategy)
+      copy(tag = Some(value))
 
     def plugin(value: String): IndexConfigBuilder[T, ST, Ready, SN, SI, O] =
-      new IndexConfigBuilder(tag, Some(value), name, index, init, batch, batchTo, retries, strategy)
+      copy(plugin = Some(value))
 
     def name(value: String): IndexConfigBuilder[T, ST, SP, Ready, SI, O] =
-      new IndexConfigBuilder(tag, plugin, Some(value), index, init, batch, batchTo, retries, strategy)
+      copy(name = Some(value))
 
     def index[E](value: List[E] => Future[Unit]): IndexConfigBuilder[E, ST, SP, SN, Ready, O] =
-      new IndexConfigBuilder(tag, plugin, name, Some(Left(value)), init, batch, batchTo, retries, strategy)
+      copy(index = Some(Left(value)))
 
     def flow[E](value: Graph[E]): IndexConfigBuilder[E, ST, SP, SN, Ready, O] =
-      new IndexConfigBuilder(tag, plugin, name, Some(Right(value)), init, batch, batchTo, retries, strategy)
+      copy(index = Some(Right(value)))
 
     def init(value: () => Future[Unit]): IndexConfigBuilder[T, ST, SP, SN, SI, O] =
-      new IndexConfigBuilder(tag, plugin, name, index, value, batch, batchTo, retries, strategy)
+      copy(init = value)
 
     def offset[S <: OffsetStorage](@silent value: S): IndexConfigBuilder[T, ST, SP, SN, SI, S] =
-      new IndexConfigBuilder(tag, plugin, name, index, init, batch, batchTo, retries, strategy)
+      copy(storage = value)
 
-    def batch(value: Int): IndexConfigBuilder[T, ST, SP, SN, SI, O] =
-      new IndexConfigBuilder(tag, plugin, name, index, init, value, batchTo, retries, strategy)
+    def batch(value: Int): IndexConfigBuilder[T, ST, SP, SN, SI, O] = copy(batch = value)
 
     def batch(value: Int, timeout: FiniteDuration): IndexConfigBuilder[T, ST, SP, SN, SI, O] =
-      new IndexConfigBuilder(tag, plugin, name, index, init, value, timeout, retries, strategy)
+      copy(batch = value, batchTo = timeout)
 
     def retry(times: Int, strategy: RetryStrategy): IndexConfigBuilder[T, ST, SP, SN, SI, O] =
-      new IndexConfigBuilder(tag, plugin, name, index, init, batch, batchTo, times, strategy)
+      copy(retries = times, strategy = strategy)
+
+    def restart(value: Boolean)(implicit @silent ev: O =:= Persist): IndexConfigBuilder[T, ST, SP, SN, SI, Persist] =
+      copy(storage = Persist(value))
 
   }
 
@@ -115,7 +122,7 @@ object IndexerConfig {
     * Retrieves the [[IndexConfigBuilder]] with the default pre-filled arguments.
     */
   final lazy val builder: IndexConfigBuilder[NotUsed, _, _, _, _, Persist] =
-    new IndexConfigBuilder()
+    IndexConfigBuilder(storage = Persist(restart = false))
 
   /**
     * Constructs a new [[IndexConfigBuilder]] with some of the arguments pre-filled with the ''as'' configuration
@@ -130,7 +137,7 @@ object IndexerConfig {
     val strategy =
       Backoff(Duration(retryConfig.getDuration("max-duration", SECONDS), SECONDS),
               retryConfig.getDouble("random-factor"))
-    new IndexConfigBuilder(retries = retries, strategy = strategy, batchTo = timeout)
+    IndexConfigBuilder(retries = retries, strategy = strategy, batchTo = timeout, storage = Persist(restart = false))
   }
 
   /**
@@ -146,6 +153,7 @@ object IndexerConfig {
     *                 Batching will the amount of time ''batchTo'' to have ''batch'' number of events
     * @param retries  the number of retries on the indexing function
     * @param strategy the retry strategy
+    * @param storage  the [[OffsetStorage]]
     * @tparam T the event type
     * @tparam O the type of [[OffsetStorage]]
     */
@@ -157,7 +165,8 @@ object IndexerConfig {
                                                                    batch: Int,
                                                                    batchTo: FiniteDuration,
                                                                    retries: Int,
-                                                                   strategy: RetryStrategy)
+                                                                   strategy: RetryStrategy,
+                                                                   storage: O)
       extends IndexerConfig[T, O]
 
   /**
@@ -173,6 +182,7 @@ object IndexerConfig {
     *                 Batching will the amount of time ''batchTo'' to have ''batch'' number of events
     * @param retries  the number of retries on the indexing function
     * @param strategy the retry strategy
+    * @param storage  the [[OffsetStorage]]
     * @tparam T the event type
     * @tparam O the type of [[OffsetStorage]]
     */
@@ -184,7 +194,8 @@ object IndexerConfig {
                                                                        batch: Int,
                                                                        batchTo: FiniteDuration,
                                                                        retries: Int,
-                                                                       strategy: RetryStrategy)
+                                                                       strategy: RetryStrategy,
+                                                                       storage: O)
       extends IndexerConfig[T, O]
 
 }
