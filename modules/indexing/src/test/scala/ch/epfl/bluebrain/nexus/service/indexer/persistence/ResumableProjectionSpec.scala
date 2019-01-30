@@ -4,6 +4,7 @@ import java.util.UUID
 
 import akka.persistence.query.{NoOffset, Offset}
 import akka.testkit.{TestKit, TestKitBase}
+import monix.execution.Scheduler.Implicits.global
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, DoNotDiscover, Matchers, WordSpecLike}
 
@@ -29,15 +30,15 @@ class ResumableProjectionSpec
     val id = UUID.randomUUID().toString
 
     "store an offset" in {
-      ResumableProjection(id).storeLatestOffset(Offset.sequence(42)).futureValue
+      ResumableProjection(id).storeLatestOffset(Offset.sequence(42)).runToFuture.futureValue
     }
 
     "retrieve stored offset" in {
-      ResumableProjection(id).fetchLatestOffset.futureValue shouldEqual Offset.sequence(42)
+      ResumableProjection(id).fetchLatestOffset.runToFuture.futureValue shouldEqual Offset.sequence(42)
     }
 
     "retrieve NoOffset for unknown projections" in {
-      ResumableProjection(UUID.randomUUID().toString).fetchLatestOffset.futureValue shouldEqual NoOffset
+      ResumableProjection(UUID.randomUUID().toString).fetchLatestOffset.runToFuture.futureValue shouldEqual NoOffset
     }
   }
 

@@ -6,30 +6,32 @@ import akka.pattern.pipe
 import akka.stream.scaladsl.{Keep, RunnableGraph, Sink, Source}
 import akka.stream.{ActorMaterializer, KillSwitches, UniqueKillSwitch}
 import ch.epfl.bluebrain.nexus.service.indexer.stream.StreamCoordinator._
+import monix.eval.Task
+import monix.execution.Scheduler
 import shapeless.Typeable
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 
 /**
   * Actor implementation that builds and manages a stream ([[RunnableGraph]]).
   * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
   * @param source an initialization function that produces a stream from an initial start value
   */
-class StreamCoordinator[A: Typeable, E](init: () => Future[A], source: A => Source[E, _])
+class StreamCoordinator[A: Typeable, E](init: Task[A], source: A => Source[E, _])(implicit sc: Scheduler)
     extends Actor
     with ActorLogging {
 
   private val A                              = implicitly[Typeable[A]]
   private implicit val as: ActorSystem       = context.system
-  private implicit val ec: ExecutionContext  = context.dispatcher
   private implicit val mt: ActorMaterializer = ActorMaterializer()
 
   private def initialize(): Unit = {
-    val _ = init().map(Start).recover {
+    val logError: PartialFunction[Throwable, Task[Unit]] = {
       case err =>
         log.error(err, "Failed on initialize function with error '{}'", err.getMessage)
-        initialize()
-    } pipeTo self
+        Task.raiseError(err)
+    }
+    val _ = init.map(Start).onErrorRecoverWith(logError).runToFuture pipeTo self
   }
 
   override def preStart(): Unit = {
@@ -109,7 +111,7 @@ object StreamCoordinator {
     * @param source an initialization function that produces a stream from an initial start value
     */
   // $COVERAGE-OFF$
-  final def props[A: Typeable, E](init: () => Future[A], source: A => Source[E, _]): Props =
+  final def props[A: Typeable, E](init: Task[A], source: A => Source[E, _])(implicit sc: Scheduler): Props =
     Props(new StreamCoordinator(init, source))
 
   /**
@@ -118,8 +120,8 @@ object StreamCoordinator {
     * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
     * @param source an initialization function that produces a stream from an initial start value
     */
-  final def start[A: Typeable, E](init: () => Future[A], source: A => Source[E, _], name: String)(
-      implicit as: ActorSystem): ActorRef =
+  final def start[A: Typeable, E](init: Task[A], source: A => Source[E, _], name: String)(implicit as: ActorSystem,
+                                                                                          sc: Scheduler): ActorRef =
     as.actorOf(props(init, source), name)
   // $COVERAGE-ON$
 }

@@ -29,7 +29,6 @@ val akkaHttpVersion                 = "10.1.5"
 val akkaHttpCirceVersion            = "1.24.3"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
 val akkaPersistenceCassandraVersion = "0.92"
-val akkaStreamKafkaVersion          = "0.22"
 val catsVersion                     = "1.4.0"
 val catsEffectVersion               = "1.2.0"
 val circeVersion                    = "0.11.1"
@@ -39,7 +38,7 @@ val monixVersion                    = "3.0.0-RC2"
 val pureconfigVersion               = "0.10.1"
 val scalaTestVersion                = "3.0.5"
 val shapelessVersion                = "2.3.3"
-val sourcingVersion                 = "0.12.2"
+val sourcingVersion                 = "0.12.3"
 
 lazy val akkaActor           = "com.typesafe.akka" %% "akka-actor"            % akkaVersion
 lazy val akkaCluster         = "com.typesafe.akka" %% "akka-cluster"          % akkaVersion
@@ -50,7 +49,6 @@ lazy val akkaHttp            = "com.typesafe.akka" %% "akka-http"             % 
 lazy val akkaHttpTestKit     = "com.typesafe.akka" %% "akka-http-testkit"     % akkaHttpVersion
 lazy val akkaStream          = "com.typesafe.akka" %% "akka-stream"           % akkaVersion
 lazy val akkaSlf4j           = "com.typesafe.akka" %% "akka-slf4j"            % akkaVersion
-lazy val akkaStreamKafka     = "com.typesafe.akka" %% "akka-stream-kafka"     % akkaStreamKafkaVersion
 
 lazy val akkaPersistence          = "com.typesafe.akka"   %% "akka-persistence"                    % akkaVersion
 lazy val akkaPersistenceQuery     = "com.typesafe.akka"   %% "akka-persistence-query"              % akkaVersion
@@ -82,8 +80,7 @@ lazy val kamonAkka       = "io.kamon" %% "kamon-akka-2.5"        % "1.1.3"
 lazy val kamonAkkaHttp   = "io.kamon" %% "kamon-akka-http-2.5"   % "1.1.1"
 lazy val kamonAkkaRemote = "io.kamon" %% "kamon-akka-remote-2.5" % "1.1.0"
 
-lazy val scalaTest     = "org.scalatest" %% "scalatest"                % scalaTestVersion
-lazy val embeddedKafka = "net.manub"     %% "scalatest-embedded-kafka" % "2.0.0"
+lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
 
 lazy val http = project
   .in(file("modules/http"))
@@ -129,8 +126,9 @@ lazy val indexing = project
       circeCore,
       circeParser,
       commonsTypes,
-      monixEval,
       journal,
+      monixEval,
+      pureconfig,
       shapeless,
       sourcingAkka,
       akkaPersistenceLauncher % Test,
@@ -141,25 +139,6 @@ lazy val indexing = project
       commonsTest             % Test,
       pureconfig              % Test,
       scalaTest               % Test,
-    )
-  )
-
-lazy val kafka = project
-  .in(file("modules/kafka"))
-  .dependsOn(indexing)
-  .settings(
-    name       := "service-kafka",
-    moduleName := "service-kafka",
-    libraryDependencies ++= Seq(
-      akkaStream,
-      akkaStreamKafka,
-      circeCore,
-      circeParser,
-      journal,
-      shapeless,
-      akkaTestKit   % Test,
-      scalaTest     % Test,
-      embeddedKafka % Test
     )
   )
 
@@ -205,7 +184,7 @@ lazy val root = project
     name       := "service",
     moduleName := "service"
   )
-  .aggregate(http, test, indexing, kafka, serialization, kamon)
+  .aggregate(http, test, indexing, serialization, kamon)
 
 /* ********************************************************
  ******************** Grouped Settings ********************

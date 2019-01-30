@@ -9,10 +9,11 @@ import akka.pattern.ask
 import akka.util.Timeout
 import cats.effect.{Async, IO, Timer}
 import cats.implicits._
-import cats.{Functor, Monad}
+import cats.{Functor, Monad, MonadError}
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStore.Subscription
 import ch.epfl.bluebrain.nexus.service.indexer.cache.KeyValueStoreError._
-import ch.epfl.bluebrain.nexus.sourcing.akka.RetryStrategy
+import ch.epfl.bluebrain.nexus.sourcing.akka.Retry
+import ch.epfl.bluebrain.nexus.sourcing.akka.syntax._
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -159,17 +160,19 @@ object KeyValueStore {
                                                                   clock: (Long, V) => Long,
                                                                   mapError: KeyValueStoreError => E)(
       implicit as: ActorSystem,
-      config: KeyValueStoreConfig): KeyValueStore[F, K, V] =
-    new DDataKeyValueStore(id, clock, mapError, config.askTimeout, config.consistencyTimeout, config.retryStrategy)
+      F: MonadError[F, E],
+      config: KeyValueStoreConfig): KeyValueStore[F, K, V] = {
+    implicit val retry: Retry[F, E] = Retry(config.retry.retryStrategy)
+    new DDataKeyValueStore(id, clock, mapError, config.askTimeout, config.consistencyTimeout)
+  }
 
   private class DDataKeyValueStore[F[_]: Async, K, V, E <: Throwable](
       id: String,
       clock: (Long, V) => Long,
       mapError: KeyValueStoreError => E,
       askTimeout: FiniteDuration,
-      consistencyTimeout: FiniteDuration,
-      retryStrategy: RetryStrategy[F]
-  )(implicit as: ActorSystem)
+      consistencyTimeout: FiniteDuration
+  )(implicit as: ActorSystem, retry: Retry[F, E])
       extends KeyValueStore[F, K, V] {
 
     private implicit val node: Cluster           = Cluster(as)
@@ -197,42 +200,42 @@ object KeyValueStore {
       val msg    = Update(mapKey, LWWMap.empty[K, V], WriteAll(consistencyTimeout))(_.put(key, value))
       val future = IO(replicator ? msg)
       val fa     = IO.fromFuture(future).to[F]
-      val mappedFA = fa.flatMap[Unit] {
-        case _: UpdateSuccess[_] => F.unit
-        // $COVERAGE-OFF$
-        case _: UpdateTimeout[_] => F.raiseError(mapError(consistencyTimeoutError))
-        case _: UpdateFailure[_] => F.raiseError(mapError(DistributedDataError("Failed to distribute write")))
-        // $COVERAGE-ON$
-      }
-      retryStrategy(mappedFA)
+      fa.flatMap[Unit] {
+          case _: UpdateSuccess[_] => F.unit
+          // $COVERAGE-OFF$
+          case _: UpdateTimeout[_] => F.raiseError(mapError(consistencyTimeoutError))
+          case _: UpdateFailure[_] => F.raiseError(mapError(DistributedDataError("Failed to distribute write")))
+          // $COVERAGE-ON$
+        }
+        .retry
     }
 
     override def remove(key: K) = {
       val msg    = Update(mapKey, LWWMap.empty[K, V], WriteAll(consistencyTimeout))(_.remove(node, key))
       val future = IO(replicator ? msg)
       val fa     = IO.fromFuture(future).to[F]
-      val mappedFA = fa.flatMap[Unit] {
-        case _: UpdateSuccess[_] => F.unit
-        // $COVERAGE-OFF$
-        case _: UpdateTimeout[_] => F.raiseError(mapError(consistencyTimeoutError))
-        case _: UpdateFailure[_] => F.raiseError(mapError(DistributedDataError("Failed to distribute write")))
-        // $COVERAGE-ON$
-      }
-      retryStrategy(mappedFA)
+      fa.flatMap[Unit] {
+          case _: UpdateSuccess[_] => F.unit
+          // $COVERAGE-OFF$
+          case _: UpdateTimeout[_] => F.raiseError(mapError(consistencyTimeoutError))
+          case _: UpdateFailure[_] => F.raiseError(mapError(DistributedDataError("Failed to distribute write")))
+          // $COVERAGE-ON$
+        }
+        .retry
     }
 
     override def entries: F[Map[K, V]] = {
       val msg    = Get(mapKey, ReadLocal)
       val future = IO(replicator ? msg)
       val fa     = IO.fromFuture(future).to[F]
-      val mappedFA = fa.flatMap[Map[K, V]] {
-        case g @ GetSuccess(`mapKey`, _) => F.pure(g.get(mapKey).entries)
-        case _: NotFound[_]              => F.pure(Map.empty)
-        // $COVERAGE-OFF$
-        case _: GetFailure[_] => F.raiseError(mapError(consistencyTimeoutError))
-        // $COVERAGE-ON$
-      }
-      retryStrategy(mappedFA)
+      fa.flatMap[Map[K, V]] {
+          case g @ GetSuccess(`mapKey`, _) => F.pure(g.get(mapKey).entries)
+          case _: NotFound[_]              => F.pure(Map.empty)
+          // $COVERAGE-OFF$
+          case _: GetFailure[_] => F.raiseError(mapError(consistencyTimeoutError))
+          // $COVERAGE-ON$
+        }
+        .retry
     }
   }
 }

@@ -2,8 +2,7 @@ package ch.epfl.bluebrain.nexus.service.indexer.persistence
 
 import akka.actor.ActorSystem
 import akka.persistence.query.Offset
-
-import scala.concurrent.Future
+import monix.eval.Task
 
 /**
   * A ResumableProjection allows storing the current projection progress based on an offset description such that it
@@ -18,7 +17,7 @@ import scala.concurrent.Future
   *
   * }}}
   */
-trait ResumableProjection {
+trait ResumableProjection[F[_]] {
 
   /**
     * @return an unique identifier for this projection
@@ -28,7 +27,7 @@ trait ResumableProjection {
   /**
     * @return the latest known offset; an inexistent offset is represented by [[akka.persistence.query.NoOffset]]
     */
-  def fetchLatestOffset: Future[Offset]
+  def fetchLatestOffset: F[Offset]
 
   /**
     * Records the argument offset against this projection progress.
@@ -36,19 +35,19 @@ trait ResumableProjection {
     * @param offset the offset to record
     * @return a future () value upon success or a failure otherwise
     */
-  def storeLatestOffset(offset: Offset): Future[Unit]
+  def storeLatestOffset(offset: Offset): F[Unit]
 }
 
 object ResumableProjection {
 
-  private[persistence] def apply(id: String, storage: ProjectionStorage) =
-    new ResumableProjection {
+  private[persistence] def apply[F[_]](id: String, storage: ProjectionStorage[F]): ResumableProjection[F] =
+    new ResumableProjection[F] {
       override val identifier: String = id
 
-      override def storeLatestOffset(offset: Offset): Future[Unit] =
+      override def storeLatestOffset(offset: Offset): F[Unit] =
         storage.storeOffset(identifier, offset)
 
-      override def fetchLatestOffset: Future[Offset] =
+      override def fetchLatestOffset: F[Offset] =
         storage.fetchLatestOffset(identifier)
     }
 
@@ -62,7 +61,7 @@ object ResumableProjection {
     * @return a new `ResumableProjection` instance with the specified identifier
     */
   // $COVERAGE-OFF$
-  def apply(id: String)(implicit as: ActorSystem): ResumableProjection =
-    apply(id, ProjectionStorage(as))
+  def apply(id: String)(implicit as: ActorSystem): ResumableProjection[Task] =
+    apply[Task](id, ProjectionStorage(as))
   // $COVERAGE-ON$
 }

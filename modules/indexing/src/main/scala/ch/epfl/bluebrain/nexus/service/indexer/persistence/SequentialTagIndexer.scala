@@ -1,7 +1,7 @@
 package ch.epfl.bluebrain.nexus.service.indexer.persistence
 
 import akka.NotUsed
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem}
 import akka.event.{Logging, LoggingAdapter}
 import akka.persistence.query.scaladsl.EventsByTagQuery
 import akka.persistence.query.{EventEnvelope, NoOffset, Offset, PersistenceQuery}
@@ -9,12 +9,14 @@ import akka.stream.scaladsl.{Flow, Source}
 import cats.implicits._
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.IndexerConfig.{IndexConfigFlow, IndexConfigFunction}
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.OffsetStorage._
-import ch.epfl.bluebrain.nexus.service.indexer.retryer.syntax._
 import ch.epfl.bluebrain.nexus.service.indexer.stream.{SingletonStreamCoordinator, StreamCoordinator}
+import ch.epfl.bluebrain.nexus.sourcing.akka.Retry
+import ch.epfl.bluebrain.nexus.sourcing.akka.syntax._
 import io.circe.Encoder
+import monix.eval.Task
+import monix.execution.Scheduler
 import shapeless.Typeable
 
-import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
 /**
@@ -78,64 +80,64 @@ object SequentialTagIndexer {
         .via(flow)
   }
 
-  private[persistence] implicit class IndexConfigVolatileOps[T](private val config: IndexerConfig[T, Volatile])(
-      implicit as: ActorSystem) {
-    import as.dispatcher
-    private implicit val s   = config.strategy
-    private implicit val log = Logging(as, SequentialTagIndexer.getClass)
+  private[persistence] class VolatileSourceBuilder[T, E](private val config: IndexerConfig[T, E, Volatile])(
+      implicit as: ActorSystem,
+      sc: Scheduler) {
+    private implicit val log                   = Logging(as, SequentialTagIndexer.getClass)
+    private implicit val retry: Retry[Task, E] = config.retry
 
-    def prepareInit: () => Future[Offset] =
-      () => config.init().map(_ => NoOffset)
+    def prepareInit: Task[Offset] = config.init.retry *> Task.pure(NoOffset)
 
     private def toFlow: Graph[T] =
       config match {
-        case c: IndexConfigFunction[T, Volatile] =>
+        case c: IndexConfigFunction[T, E, Volatile] =>
           Flow[OffsetEvts[T]].mapAsync(1) {
-            case OffsetEvts(off, events) =>
-              (() => c.index(events.map(_.value))).retry(c.retries).map(_ => off)
+            case OffsetEvts(off, events) => c.index(events.map(_.value)).retry.map(_ => off).runToFuture
           }
-        case c: IndexConfigFlow[T, Volatile] => c.flow
+        case c: IndexConfigFlow[T, E, Volatile] => c.flow
       }
 
     def source(implicit T: Typeable[T]): Offset => Source[Offset, NotUsed] =
       SequentialTagIndexer.source(config.pluginId, config.tag, config.batch, config.batchTo, toFlow)
   }
 
-  private[persistence] implicit class IndexConfigPersistOps[T](config: IndexerConfig[T, Persist])(
+  private[persistence] class PersistentSourceBuilder[T, E](config: IndexerConfig[T, E, Persist])(
       implicit as: ActorSystem,
+      sc: Scheduler,
       E: Encoder[T]) {
-    import as.dispatcher
-    private implicit val s      = config.strategy
-    private implicit val log    = Logging(as, SequentialTagIndexer.getClass)
-    private lazy val failureLog = IndexFailuresLog(config.name)
-    private lazy val projection = ResumableProjection(config.name)
+    private implicit val log                          = Logging(as, SequentialTagIndexer.getClass)
+    private val failureLog: IndexFailuresLog[Task]    = IndexFailuresLog(config.name)
+    private val projection: ResumableProjection[Task] = ResumableProjection(config.name)
+    private implicit val retry: Retry[Task, E]        = config.retry
 
-    def prepareInit: () => Future[Offset] =
-      if (config.storage.restart)() => config.init().map(_ => NoOffset)
+    def prepareInit: Task[Offset] =
+      if (config.storage.restart)
+        config.init.retry *> Task.pure(NoOffset)
       else
-        () => config.init().flatMap(_ => projection.fetchLatestOffset)
+        config.init.retry.flatMap(_ => projection.fetchLatestOffset.retry)
 
     private def toFlow: Graph[T] =
       config match {
-        case c: IndexConfigFunction[T, Persist] =>
+        case c: IndexConfigFunction[T, E, Persist] =>
           Flow[OffsetEvts[T]].mapAsync(1) {
             case OffsetEvts(off, events) =>
-              (() => c.index(events.map(_.value)))
-                .retry(c.retries)
+              c.index(events.map(_.value))
+                .retry
                 .recoverWith {
                   case err =>
-                    Future.sequence(events.map { el =>
+                    Task.sequence(events.map { el =>
                       log.error(err,
                                 "Indexing event with id '{}' and value '{}' failed'{}'",
                                 el.persistenceId,
                                 el.value,
                                 err.getMessage)
                       failureLog.storeEvent(el.persistenceId, off, el.value)
-                    })
+                    }) *> Task.unit
                 }
                 .map(_ => off)
+                .runToFuture
           }
-        case c: IndexConfigFlow[T, Persist] => c.flow
+        case c: IndexConfigFlow[T, E, Persist] => c.flow
       }
 
     def source(implicit T: Typeable[T]): Offset => Source[Unit, NotUsed] =
@@ -144,8 +146,8 @@ object SequentialTagIndexer {
           .source(config.pluginId, config.tag, config.batch, config.batchTo, toFlow)
           .apply(offset)
           .mapAsync(1) { offset =>
-            log.debug("Storing latest offset '{}'", offset)
-            projection.storeLatestOffset(offset)
+            log.info("Storing latest offset '{}'", offset)
+            projection.storeLatestOffset(offset).runToFuture
         }
   }
 
@@ -156,8 +158,11 @@ object SequentialTagIndexer {
     * @param config the index configuration which holds the necessary information to start the tag indexer
     * @tparam T the event type
     */
-  final def start[T](config: IndexerConfig[T, Volatile])(implicit as: ActorSystem, T: Typeable[T]) =
-    StreamCoordinator.start(config.prepareInit, config.source, config.name)
+  final def start[T: Typeable, E](config: IndexerConfig[T, E, Volatile])(implicit as: ActorSystem,
+                                                                         sc: Scheduler): ActorRef = {
+    val builder = new VolatileSourceBuilder(config)
+    StreamCoordinator.start(builder.prepareInit, builder.source, config.name)
+  }
 
   /**
     * Generic tag indexer that iterates over the collection of events selected via the specified tag.
@@ -166,8 +171,11 @@ object SequentialTagIndexer {
     * @param config the index configuration which holds the necessary information to start the tag indexer
     * @tparam T the event type
     */
-  final def start[T](config: IndexerConfig[T, Persist])(implicit as: ActorSystem, T: Typeable[T], E: Encoder[T]) =
-    SingletonStreamCoordinator.start(config.prepareInit, config.source, config.name)
+  final def start[T: Typeable, E](
+      config: IndexerConfig[T, E, Persist])(implicit as: ActorSystem, sc: Scheduler, E: Encoder[T]): ActorRef = {
+    val builder = new PersistentSourceBuilder(config)
+    SingletonStreamCoordinator.start(builder.prepareInit, builder.source, config.name)
+  }
 
   // $COVERAGE-ON$
 }

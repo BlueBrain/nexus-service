@@ -4,12 +4,14 @@ import akka.actor.{ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvi
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query.{Offset, Sequence, TimeBasedUUID}
 import akka.stream.scaladsl.Source
+import cats.Monad
+import cats.effect.LiftIO
+import cats.implicits._
 import io.circe.parser._
 import io.circe.{Decoder, Encoder}
+import monix.eval.Task
 
-import scala.concurrent.{ExecutionContext, Future}
-
-trait IndexFailuresStorage {
+trait IndexFailuresStorage[F[_]] {
 
   /**
     * Record a specific event against a index failures log identifier.
@@ -21,7 +23,7 @@ trait IndexFailuresStorage {
     * @tparam T the generic type of the ''event''s
     */
   def storeEvent[T](identifier: String, persistenceId: String, offset: Offset, event: T)(
-      implicit E: Encoder[T]): Future[Unit]
+      implicit E: Encoder[T]): F[Unit]
 
   /**
     * Retrieve the events for the provided index failures log identifier.
@@ -33,20 +35,17 @@ trait IndexFailuresStorage {
   def fetchEvents[T](identifier: String)(implicit D: Decoder[T]): Source[T, _]
 }
 
-final class CassandraIndexFailuresStorage(session: CassandraSession, keyspace: String, table: String)(
-    implicit
-    ec: ExecutionContext)
-    extends IndexFailuresStorage
+final class CassandraIndexFailuresStorage[F[_]: LiftIO](session: CassandraSession, keyspace: String, table: String)(
+    implicit F: Monad[F])
+    extends IndexFailuresStorage[F]
     with Extension
     with OffsetCodec {
 
   override def storeEvent[T](identifier: String, persistenceId: String, offset: Offset, event: T)(
-      implicit E: Encoder[T]): Future[Unit] = {
+      implicit E: Encoder[T]): F[Unit] = {
     val stmt =
       s"insert into $keyspace.$table (identifier, persistenceId, offset, event) VALUES (?, ?, ?, ?) IF NOT EXISTS"
-    session
-      .executeWrite(stmt, identifier, persistenceId, toValue(offset), E(event).noSpaces)
-      .map(_ => ())
+    liftIO(session.executeWrite(stmt, identifier, persistenceId, toValue(offset), E(event).noSpaces)) *> F.unit
   }
 
   override def fetchEvents[T](identifier: String)(implicit D: Decoder[T]): Source[T, _] = {
@@ -64,19 +63,19 @@ final class CassandraIndexFailuresStorage(session: CassandraSession, keyspace: S
 }
 
 object IndexFailuresStorage
-    extends ExtensionId[CassandraIndexFailuresStorage]
+    extends ExtensionId[CassandraIndexFailuresStorage[Task]]
     with ExtensionIdProvider
     with CassandraStorage {
 
   override def lookup(): ExtensionId[_ <: Extension] = IndexFailuresStorage
 
-  override def createExtension(system: ExtendedActorSystem): CassandraIndexFailuresStorage = {
+  override def createExtension(system: ExtendedActorSystem): CassandraIndexFailuresStorage[Task] = {
     val (session, keyspace, table) =
       createSession(
         "index-failures",
         "identifier varchar, persistenceId text, offset bigint, event text, PRIMARY KEY (identifier, persistenceId, offset)",
         system)
-    new CassandraIndexFailuresStorage(session, keyspace, table)(system.dispatcher)
+    new CassandraIndexFailuresStorage[Task](session, keyspace, table)
   }
 
 }

@@ -9,7 +9,7 @@ import ch.epfl.bluebrain.nexus.service.indexer.persistence.IndexFailuresStorageS
 import io.circe.generic.auto._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, DoNotDiscover, Matchers, WordSpecLike}
-
+import monix.execution.Scheduler.Implicits.global
 import scala.concurrent.duration._
 
 //noinspection TypeAnnotation
@@ -34,11 +34,17 @@ class IndexFailuresStorageSpec
     implicit val mt   = ActorMaterializer()
 
     "store an event" in {
-      IndexFailuresLog(id).storeEvent(persistenceId, Offset.sequence(42), SomeEvent(1L, "description")).futureValue
+      IndexFailuresLog(id)
+        .storeEvent(persistenceId, Offset.sequence(42), SomeEvent(1L, "description"))
+        .runToFuture
+        .futureValue
     }
 
     "store another event" in {
-      IndexFailuresLog(id).storeEvent(persistenceId, Offset.sequence(1), SomeEvent(2L, "description2")).futureValue
+      IndexFailuresLog(id)
+        .storeEvent(persistenceId, Offset.sequence(1), SomeEvent(2L, "description2"))
+        .runToFuture
+        .futureValue
     }
 
     "retrieve stored events" in {

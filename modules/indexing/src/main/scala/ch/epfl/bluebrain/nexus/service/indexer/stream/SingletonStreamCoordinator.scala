@@ -4,9 +4,9 @@ import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings}
 import akka.stream.scaladsl.Source
 import ch.epfl.bluebrain.nexus.service.indexer.stream.StreamCoordinator.Stop
+import monix.eval.Task
+import monix.execution.Scheduler
 import shapeless.Typeable
-
-import scala.concurrent.Future
 
 object SingletonStreamCoordinator {
 
@@ -17,7 +17,8 @@ object SingletonStreamCoordinator {
     * @param source an initialization function that produces a stream from an initial start value
     */
   // $COVERAGE-OFF$
-  final def props[A: Typeable, E](init: () => Future[A], source: A => Source[E, _])(implicit as: ActorSystem): Props =
+  final def props[A: Typeable, E](init: Task[A], source: A => Source[E, _])(implicit as: ActorSystem,
+                                                                            sc: Scheduler): Props =
     ClusterSingletonManager.props(Props(new StreamCoordinator(init, source)),
                                   terminationMessage = Stop,
                                   settings = ClusterSingletonManagerSettings(as))
@@ -28,8 +29,8 @@ object SingletonStreamCoordinator {
     * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
     * @param source an initialization function that produces a stream from an initial start value
     */
-  final def start[A: Typeable, E](init: () => Future[A], source: A => Source[E, _], name: String)(
-      implicit as: ActorSystem): ActorRef =
+  final def start[A: Typeable, E](init: Task[A], source: A => Source[E, _], name: String)(implicit as: ActorSystem,
+                                                                                          sc: Scheduler): ActorRef =
     as.actorOf(props(init, source), name)
   // $COVERAGE-ON$
 }
