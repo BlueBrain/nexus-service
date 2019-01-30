@@ -146,7 +146,7 @@ object SequentialTagIndexer {
           .source(config.pluginId, config.tag, config.batch, config.batchTo, toFlow)
           .apply(offset)
           .mapAsync(1) { offset =>
-            log.info("Storing latest offset '{}'", offset)
+            log.debug("Storing latest offset '{}'", offset)
             projection.storeLatestOffset(offset).runToFuture
         }
   }
