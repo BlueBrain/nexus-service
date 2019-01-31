@@ -18,7 +18,9 @@ class KeyValueStoreConfigSpec
     with Matchers
     with OptionValues {
 
-  val config = KeyValueStoreConfig(10 seconds, 10 seconds, RetryStrategyConfig("exponential", 100 millis, 7, 2))
+  val config = KeyValueStoreConfig(10 seconds,
+                                   10 seconds,
+                                   RetryStrategyConfig("exponential", 100 millis, 10 hours, 7, 0.5, 500 millis))
 
   "KeyValueStoreConfig" should {
 

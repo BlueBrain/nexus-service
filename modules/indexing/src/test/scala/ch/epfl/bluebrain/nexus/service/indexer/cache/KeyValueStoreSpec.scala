@@ -24,8 +24,7 @@ class KeyValueStoreSpec
     with Eventually {
 
   private implicit val ec = system.dispatcher
-
-  private implicit val t = timer(ec)
+  private implicit val t  = timer(ec)
 
   "A KeyValueStore" should {
 
@@ -42,10 +41,11 @@ class KeyValueStoreSpec
     val onChange: OnKeyValueStoreChange[String, RevisionedValue[String]] =
       (value: KeyValueStoreChanges[String, RevisionedValue[String]]) => changes += value
 
-    implicit val config = KeyValueStoreConfig(4 seconds, 3 seconds, RetryStrategyConfig("never", 0 seconds, 0, 0))
+    implicit val config =
+      KeyValueStoreConfig(4 seconds, 3 seconds, RetryStrategyConfig("never", 0 millis, 0 millis, 0, 0.0, 0 millis))
     val store =
-      KeyValueStore.distributed[IO, String, RevisionedValue[String], ErrorWrapper]("spec", { case (_, rv) => rv.rev },
-                                                                                   ErrorWrapper.apply(_))
+      KeyValueStore.distributed[IO, String, RevisionedValue[String], Throwable]("spec", { case (_, rv) => rv.rev },
+                                                                                ErrorWrapper)
 
     var subscription: Subscription = null
     val probe                      = TestProbe()
@@ -138,9 +138,9 @@ class KeyValueStoreSpec
     }
 
     "return empty entries" in {
-      val store = KeyValueStore.distributed[IO, String, RevisionedValue[String], ErrorWrapper]("empty", {
+      val store = KeyValueStore.distributed[IO, String, RevisionedValue[String], Throwable]("empty", {
         case (_, rv) => rv.rev
-      }, ErrorWrapper(_))
+      }, ErrorWrapper)
       store.entries.ioValue shouldEqual Map.empty[String, RevisionedValue[String]]
     }
 

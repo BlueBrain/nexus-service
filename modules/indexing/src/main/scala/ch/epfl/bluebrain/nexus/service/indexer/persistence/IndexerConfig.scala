@@ -1,17 +1,20 @@
 package ch.epfl.bluebrain.nexus.service.indexer.persistence
 
-import java.util.concurrent.TimeUnit.{MILLISECONDS, SECONDS}
+import java.util.concurrent.TimeUnit.MILLISECONDS
 
 import akka.NotUsed
 import akka.actor.ActorSystem
+import cats.MonadError
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.OffsetStorage._
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.SequentialTagIndexer.Graph
-import ch.epfl.bluebrain.nexus.service.indexer.retryer.RetryStrategy
-import ch.epfl.bluebrain.nexus.service.indexer.retryer.RetryStrategy.{Backoff, Linear}
+import ch.epfl.bluebrain.nexus.sourcing.akka.RetryStrategy.Linear
+import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
+import ch.epfl.bluebrain.nexus.sourcing.akka.{Retry, RetryStrategy}
 import com.github.ghik.silencer.silent
+import monix.eval.Task
+import pureconfig.generic.auto._
+import pureconfig.loadConfigOrThrow
 
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 import scala.concurrent.duration._
 
 /**
@@ -20,15 +23,15 @@ import scala.concurrent.duration._
   * @tparam T the event type
   * @tparam O the type of [[OffsetStorage]]
   */
-sealed trait IndexerConfig[T, O] {
+sealed trait IndexerConfig[T, E, O] {
   def name: String
   def tag: String
   def pluginId: String
-  def init: () => Future[Unit]
-  def strategy: RetryStrategy
+  def init: Task[Unit]
   def batch: Int
   def batchTo: FiniteDuration
   def storage: O
+  def retry: Retry[Task, E]
 }
 
 /**
@@ -62,82 +65,85 @@ object IndexerConfig {
   private sealed trait Ready
 
   @SuppressWarnings(Array("UnusedMethodParameter"))
-  private[IndexerConfig] final case class IndexConfigBuilder[T, ST, SP, SN, SI, O <: OffsetStorage](
+  private[IndexerConfig] final case class IndexConfigBuilder[T, ST, SP, SN, SI, E, O <: OffsetStorage](
       tag: Option[String] = None,
       plugin: Option[String] = None,
       name: Option[String] = None,
-      index: Option[Either[List[T] => Future[Unit], Graph[T]]] = None,
-      init: () => Future[Unit] = () => Future(()),
+      index: Option[Either[List[T] => Task[Unit], Graph[T]]] = None,
+      init: Task[Unit] = Task.unit,
       batch: Int = 1,
       batchTo: FiniteDuration = 50 millis,
-      retries: Int = 1,
-      strategy: RetryStrategy = Linear(0 seconds),
+      strategy: RetryStrategy = Linear(0 millis, 2000 hours),
+      error: MonadError[Task, E],
       storage: O) {
 
+    private implicit val F = error
+
     @silent
-    def build(implicit e1: ST =:= Ready, e2: SP =:= Ready, e3: SN =:= Ready, e4: SI =:= Ready): IndexerConfig[T, O] =
+    def build(implicit e1: ST =:= Ready, e2: SP =:= Ready, e3: SN =:= Ready, e4: SI =:= Ready): IndexerConfig[T, E, O] =
       (tag, plugin, name, index) match {
         case (Some(t), Some(p), Some(n), Some(Right(flow))) =>
-          IndexConfigFlow(t, p, n, flow, init, batch, batchTo, retries, strategy, storage)
+          IndexConfigFlow(t, p, n, flow, init, batch, batchTo, Retry(strategy), storage)
         case (Some(t), Some(p), Some(n), Some(Left(i))) =>
-          IndexConfigFunction(t, p, n, i, init, batch, batchTo, retries, strategy, storage)
+          IndexConfigFunction(t, p, n, i, init, batch, batchTo, Retry(strategy), storage)
         case _ => throw new RuntimeException("Unexpected: some of the required fields are not set")
       }
 
-    def tag(value: String): IndexConfigBuilder[T, Ready, SP, SN, SI, O] =
+    def tag(value: String): IndexConfigBuilder[T, Ready, SP, SN, SI, E, O] =
       copy(tag = Some(value))
 
-    def plugin(value: String): IndexConfigBuilder[T, ST, Ready, SN, SI, O] =
+    def plugin(value: String): IndexConfigBuilder[T, ST, Ready, SN, SI, E, O] =
       copy(plugin = Some(value))
 
-    def name(value: String): IndexConfigBuilder[T, ST, SP, Ready, SI, O] =
+    def name(value: String): IndexConfigBuilder[T, ST, SP, Ready, SI, E, O] =
       copy(name = Some(value))
 
-    def index[E](value: List[E] => Future[Unit]): IndexConfigBuilder[E, ST, SP, SN, Ready, O] =
+    def index[EE](value: List[EE] => Task[Unit]): IndexConfigBuilder[EE, ST, SP, SN, Ready, E, O] =
       copy(index = Some(Left(value)))
 
-    def flow[E](value: Graph[E]): IndexConfigBuilder[E, ST, SP, SN, Ready, O] =
+    def flow[EE](value: Graph[EE]): IndexConfigBuilder[EE, ST, SP, SN, Ready, E, O] =
       copy(index = Some(Right(value)))
 
-    def init(value: () => Future[Unit]): IndexConfigBuilder[T, ST, SP, SN, SI, O] =
+    def init(value: Task[Unit]): IndexConfigBuilder[T, ST, SP, SN, SI, E, O] =
       copy(init = value)
 
-    def offset[S <: OffsetStorage](@silent value: S): IndexConfigBuilder[T, ST, SP, SN, SI, S] =
+    def offset[S <: OffsetStorage](@silent value: S): IndexConfigBuilder[T, ST, SP, SN, SI, E, S] =
       copy(storage = value)
 
-    def batch(value: Int): IndexConfigBuilder[T, ST, SP, SN, SI, O] = copy(batch = value)
+    def batch(value: Int): IndexConfigBuilder[T, ST, SP, SN, SI, E, O] =
+      copy(batch = value)
 
-    def batch(value: Int, timeout: FiniteDuration): IndexConfigBuilder[T, ST, SP, SN, SI, O] =
+    def batch(value: Int, timeout: FiniteDuration): IndexConfigBuilder[T, ST, SP, SN, SI, E, O] =
       copy(batch = value, batchTo = timeout)
 
-    def retry(times: Int, strategy: RetryStrategy): IndexConfigBuilder[T, ST, SP, SN, SI, O] =
-      copy(retries = times, strategy = strategy)
+    def retry[EE](strategy: RetryStrategy)(
+        implicit EE: MonadError[Task, EE]): IndexConfigBuilder[T, ST, SP, SN, SI, EE, O] =
+      copy(error = EE, strategy = strategy)
 
-    def restart(value: Boolean)(implicit @silent ev: O =:= Persist): IndexConfigBuilder[T, ST, SP, SN, SI, Persist] =
+    def restart(value: Boolean)(implicit @silent ev: O =:= Persist): IndexConfigBuilder[T, ST, SP, SN, SI, E, Persist] =
       copy(storage = Persist(value))
 
   }
 
+  private val taskMonadError = implicitly[MonadError[Task, Throwable]]
+
   /**
     * Retrieves the [[IndexConfigBuilder]] with the default pre-filled arguments.
     */
-  final lazy val builder: IndexConfigBuilder[NotUsed, _, _, _, _, Persist] =
-    IndexConfigBuilder(storage = Persist(restart = false))
+  final lazy val builder: IndexConfigBuilder[NotUsed, _, _, _, _, Throwable, Persist] =
+    IndexConfigBuilder(storage = Persist(restart = false), error = taskMonadError)
 
   /**
     * Constructs a new [[IndexConfigBuilder]] with some of the arguments pre-filled with the ''as'' configuration
     *
     * @param as the [[ActorSystem]]
     */
-  final def fromConfig(implicit as: ActorSystem): IndexConfigBuilder[NotUsed, _, _, _, _, Persist] = {
-    val config      = as.settings.config.getConfig("indexing")
-    val timeout     = FiniteDuration(config.getDuration("batch-timeout", MILLISECONDS), MILLISECONDS)
-    val retryConfig = config.getConfig("retry")
-    val retries     = retryConfig.getInt("max-count")
-    val strategy =
-      Backoff(Duration(retryConfig.getDuration("max-duration", SECONDS), SECONDS),
-              retryConfig.getDouble("random-factor"))
-    IndexConfigBuilder(retries = retries, strategy = strategy, batchTo = timeout, storage = Persist(restart = false))
+  final def fromConfig(implicit as: ActorSystem): IndexConfigBuilder[NotUsed, _, _, _, _, Throwable, Persist] = {
+    val config                           = as.settings.config.getConfig("indexing")
+    val timeout                          = FiniteDuration(config.getDuration("batch-timeout", MILLISECONDS), MILLISECONDS)
+    val chunk                            = config.getInt("batch-chunk")
+    val retryConfig: RetryStrategyConfig = loadConfigOrThrow[RetryStrategyConfig](config, "retry")
+    builder.retry(retryConfig.retryStrategy).batch(chunk, timeout)
   }
 
   /**
@@ -151,23 +157,21 @@ object IndexerConfig {
     * @param batch    the number of events to be grouped
     * @param batchTo  the timeout for the grouping on batches.
     *                 Batching will the amount of time ''batchTo'' to have ''batch'' number of events
-    * @param retries  the number of retries on the indexing function
-    * @param strategy the retry strategy
+    * @param retry the retry strategy
     * @param storage  the [[OffsetStorage]]
     * @tparam T the event type
     * @tparam O the type of [[OffsetStorage]]
     */
-  final case class IndexConfigFlow[T, O <: OffsetStorage] private (tag: String,
-                                                                   pluginId: String,
-                                                                   name: String,
-                                                                   flow: Graph[T],
-                                                                   init: () => Future[Unit],
-                                                                   batch: Int,
-                                                                   batchTo: FiniteDuration,
-                                                                   retries: Int,
-                                                                   strategy: RetryStrategy,
-                                                                   storage: O)
-      extends IndexerConfig[T, O]
+  final case class IndexConfigFlow[T, E, O <: OffsetStorage] private (tag: String,
+                                                                      pluginId: String,
+                                                                      name: String,
+                                                                      flow: Graph[T],
+                                                                      init: Task[Unit],
+                                                                      batch: Int,
+                                                                      batchTo: FiniteDuration,
+                                                                      retry: Retry[Task, E],
+                                                                      storage: O)
+      extends IndexerConfig[T, E, O]
 
   /**
     * Configuration to instrument a [[SequentialTagIndexer]] using am index function.
@@ -180,22 +184,20 @@ object IndexerConfig {
     * @param batch    the number of events to be grouped
     * @param batchTo  the timeout for the grouping on batches.
     *                 Batching will the amount of time ''batchTo'' to have ''batch'' number of events
-    * @param retries  the number of retries on the indexing function
-    * @param strategy the retry strategy
+    * @param retry the retry strategy
     * @param storage  the [[OffsetStorage]]
     * @tparam T the event type
     * @tparam O the type of [[OffsetStorage]]
     */
-  final case class IndexConfigFunction[T, O <: OffsetStorage] private (tag: String,
-                                                                       pluginId: String,
-                                                                       name: String,
-                                                                       index: List[T] => Future[Unit],
-                                                                       init: () => Future[Unit],
-                                                                       batch: Int,
-                                                                       batchTo: FiniteDuration,
-                                                                       retries: Int,
-                                                                       strategy: RetryStrategy,
-                                                                       storage: O)
-      extends IndexerConfig[T, O]
+  final case class IndexConfigFunction[T, E, O <: OffsetStorage] private (tag: String,
+                                                                          pluginId: String,
+                                                                          name: String,
+                                                                          index: List[T] => Task[Unit],
+                                                                          init: Task[Unit],
+                                                                          batch: Int,
+                                                                          batchTo: FiniteDuration,
+                                                                          retry: Retry[Task, E],
+                                                                          storage: O)
+      extends IndexerConfig[T, E, O]
 
 }
