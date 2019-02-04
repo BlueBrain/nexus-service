@@ -4,7 +4,7 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.cluster.Cluster
 import akka.cluster.ddata.LWWRegister.Clock
 import akka.cluster.ddata.Replicator._
-import akka.cluster.ddata.{DistributedData, LWWMap, LWWMapKey}
+import akka.cluster.ddata.{DistributedData, LWWMap, LWWMapKey, SelfUniqueAddress}
 import akka.pattern.ask
 import akka.util.Timeout
 import cats.effect.{Async, IO, Timer}
@@ -176,6 +176,7 @@ object KeyValueStore {
       extends KeyValueStore[F, K, V] {
 
     private implicit val node: Cluster           = Cluster(as)
+    private val uniqueAddr: SelfUniqueAddress    = SelfUniqueAddress(node.selfUniqueAddress)
     private implicit val registerClock: Clock[V] = (currentTimestamp: Long, value: V) => clock(currentTimestamp, value)
     private implicit val timeout: Timeout        = Timeout(askTimeout)
 
@@ -197,7 +198,8 @@ object KeyValueStore {
     }
 
     override def put(key: K, value: V): F[Unit] = {
-      val msg    = Update(mapKey, LWWMap.empty[K, V], WriteAll(consistencyTimeout))(_.put(key, value))
+      val msg =
+        Update(mapKey, LWWMap.empty[K, V], WriteAll(consistencyTimeout))(_.put(uniqueAddr, key, value, registerClock))
       val future = IO(replicator ? msg)
       val fa     = IO.fromFuture(future).to[F]
       fa.flatMap[Unit] {
@@ -211,7 +213,7 @@ object KeyValueStore {
     }
 
     override def remove(key: K) = {
-      val msg    = Update(mapKey, LWWMap.empty[K, V], WriteAll(consistencyTimeout))(_.remove(node, key))
+      val msg    = Update(mapKey, LWWMap.empty[K, V], WriteAll(consistencyTimeout))(_.remove(uniqueAddr, key))
       val future = IO(replicator ? msg)
       val fa     = IO.fromFuture(future).to[F]
       fa.flatMap[Unit] {
