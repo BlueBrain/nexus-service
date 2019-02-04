@@ -24,7 +24,7 @@ scalafmt: {
 }
  */
 
-val akkaVersion                     = "2.5.19"
+val akkaVersion                     = "2.5.20"
 val akkaHttpVersion                 = "10.1.5"
 val akkaHttpCirceVersion            = "1.24.3"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
@@ -32,7 +32,7 @@ val akkaPersistenceCassandraVersion = "0.92"
 val catsVersion                     = "1.4.0"
 val catsEffectVersion               = "1.2.0"
 val circeVersion                    = "0.11.1"
-val commonsVersion                  = "0.10.41"
+val commonsVersion                  = "0.10.42"
 val journalVersion                  = "3.0.19"
 val monixVersion                    = "3.0.0-RC2"
 val pureconfigVersion               = "0.10.1"
