@@ -141,7 +141,7 @@ object IndexerConfig {
   final def fromConfig(implicit as: ActorSystem): IndexConfigBuilder[NotUsed, _, _, _, _, Throwable, Persist] = {
     val config                           = as.settings.config.getConfig("indexing")
     val timeout                          = FiniteDuration(config.getDuration("batch-timeout", MILLISECONDS), MILLISECONDS)
-    val chunk                            = config.getInt("batch-chunk")
+    val chunk                            = config.getInt("batch")
     val retryConfig: RetryStrategyConfig = loadConfigOrThrow[RetryStrategyConfig](config, "retry")
     builder.retry(retryConfig.retryStrategy).batch(chunk, timeout)
   }
