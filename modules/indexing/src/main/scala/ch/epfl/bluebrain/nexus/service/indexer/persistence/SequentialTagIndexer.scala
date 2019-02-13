@@ -7,7 +7,6 @@ import akka.persistence.query.scaladsl.EventsByTagQuery
 import akka.persistence.query.{EventEnvelope, NoOffset, Offset, PersistenceQuery}
 import akka.stream.scaladsl.{Flow, Source}
 import cats.implicits._
-import ch.epfl.bluebrain.nexus.service.indexer.persistence.IndexerConfig.{IndexConfigFlow, IndexConfigFunction}
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.OffsetStorage._
 import ch.epfl.bluebrain.nexus.service.indexer.stream.{SingletonStreamCoordinator, StreamCoordinator}
 import ch.epfl.bluebrain.nexus.sourcing.akka.Retry
@@ -89,12 +88,8 @@ object SequentialTagIndexer {
     def prepareInit: Task[Offset] = config.init.retry *> Task.pure(NoOffset)
 
     private def toFlow: Graph[T] =
-      config match {
-        case c: IndexConfigFunction[T, E, Volatile] =>
-          Flow[OffsetEvts[T]].mapAsync(1) {
-            case OffsetEvts(off, events) => c.index(events.map(_.value)).retry.map(_ => off).runToFuture
-          }
-        case c: IndexConfigFlow[T, E, Volatile] => c.flow
+      Flow[OffsetEvts[T]].mapAsync(1) {
+        case OffsetEvts(off, events) => config.index(events.map(_.value)).retry.map(_ => off).runToFuture
       }
 
     def source(implicit T: Typeable[T]): Offset => Source[Offset, NotUsed] =
@@ -117,27 +112,24 @@ object SequentialTagIndexer {
         config.init.retry.flatMap(_ => projection.fetchLatestOffset.retry)
 
     private def toFlow: Graph[T] =
-      config match {
-        case c: IndexConfigFunction[T, E, Persist] =>
-          Flow[OffsetEvts[T]].mapAsync(1) {
-            case OffsetEvts(off, events) =>
-              c.index(events.map(_.value))
-                .retry
-                .recoverWith {
-                  case err =>
-                    Task.sequence(events.map { el =>
-                      log.error(err,
-                                "Indexing event with id '{}' and value '{}' failed'{}'",
-                                el.persistenceId,
-                                el.value,
-                                err.getMessage)
-                      failureLog.storeEvent(el.persistenceId, off, el.value)
-                    }) *> Task.unit
-                }
-                .map(_ => off)
-                .runToFuture
-          }
-        case c: IndexConfigFlow[T, E, Persist] => c.flow
+      Flow[OffsetEvts[T]].mapAsync(1) {
+        case OffsetEvts(off, events) =>
+          config
+            .index(events.map(_.value))
+            .retry
+            .recoverWith {
+              case err =>
+                Task.sequence(events.map { el =>
+                  log.error(err,
+                            "Indexing event with id '{}' and value '{}' failed'{}'",
+                            el.persistenceId,
+                            el.value,
+                            err.getMessage)
+                  failureLog.storeEvent(el.persistenceId, off, el.value)
+                }) *> Task.unit
+            }
+            .map(_ => off)
+            .runToFuture
       }
 
     def source(implicit T: Typeable[T]): Offset => Source[Unit, NotUsed] =
