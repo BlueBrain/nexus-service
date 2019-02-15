@@ -4,16 +4,19 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
 import akka.Done
+import akka.actor.ActorRef
 import akka.cluster.Cluster
+import akka.persistence.query.Offset
 import akka.stream.ActorMaterializer
 import akka.testkit.{TestActorRef, TestKit, TestKitBase}
 import akka.util.Timeout
 import cats.MonadError
 import cats.effect.{IO, Timer}
 import ch.epfl.bluebrain.nexus.commons.types.{Err, RetriableErr}
+import ch.epfl.bluebrain.nexus.service.indexer.StreamByTag
+import ch.epfl.bluebrain.nexus.service.indexer.StreamByTag.PersistentStreamByTag
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.Fixture._
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.IndexerConfig.fromConfig
-import ch.epfl.bluebrain.nexus.service.indexer.persistence.SequentialTagIndexer._
 import ch.epfl.bluebrain.nexus.service.indexer.persistence.SequentialTagIndexerSpec._
 import ch.epfl.bluebrain.nexus.service.indexer.stream.StreamCoordinator
 import ch.epfl.bluebrain.nexus.service.indexer.stream.StreamCoordinator.Stop
@@ -78,13 +81,7 @@ class SequentialTagIndexerSpec
       override def tailRecM[A, B](a: A)(f: A => Task[Either[A, B]]): Task[B] = Task.tailRecM(a)(f)
     }
 
-    def initFunction(init: AtomicLong): Task[Unit] =
-      Task.deferFuture {
-        init.incrementAndGet()
-        Future.successful(())
-      }
-
-    sealed abstract class Context[T](name: String, batch: Int = 1) {
+    sealed abstract class Context[T](name: String, batch: Int = 1, tag: String) {
       val agg = AkkaAggregate
         .sharded[IO](
           name,
@@ -100,28 +97,57 @@ class SequentialTagIndexerSpec
 
       val count = new AtomicLong(0L)
       val init  = new AtomicLong(10L)
-      val index: List[T] => Task[Unit] = (l: List[T]) =>
-        Task.deferFuture(Future.successful[Unit] {
-          l.size shouldEqual batch
-          val _ = count.incrementAndGet()
-        })
+
+      def initFunction(init: AtomicLong): Task[Unit] =
+        Task.deferFuture {
+          init.incrementAndGet()
+          Future.successful(())
+        }
+
+      def index: List[EventTransform] => Task[Unit] =
+        (l: List[EventTransform]) =>
+          Task.deferFuture(Future.successful[Unit] {
+            l.size shouldEqual batch
+            val _ = count.incrementAndGet()
+          })
+
+      def mapping(event: Event): Task[Option[EventTransform]] =
+        Task {
+          event match {
+            case Executed           => Some(ExecutedTransform)
+            case OtherExecuted      => Some(OtherExecutedTransform)
+            case AnotherExecuted    => Some(AnotherExecutedTransform)
+            case YetAnotherExecuted => Some(YetAnotherExecutedTransform)
+            case RetryExecuted      => Some(RetryExecutedTransform)
+            case IgnoreExecuted     => Some(IgnoreExecutedTransform)
+          }
+        }
 
       val projId = UUID.randomUUID().toString
-    }
 
-    "index existing events" in new Context[Event]("agg") {
-      agg.append("first", Fixture.Executed).unsafeRunAsyncAndForget()
-
-      val config = fromConfig
+      lazy val indexConfig = fromConfig[Task]
         .name(projId)
         .plugin(pluginId)
-        .tag("executed")
+        .tag(tag)
+        .batch(batch)
         .init(initFunction(init))
+        .mapping(mapping)
         .index(index)
         .retry[RetriableErr](Linear(100 millis, 1 second, maxRetries = 3))
         .build
-      val builder = new PersistentSourceBuilder(config)
-      val indexer = TestActorRef(new StreamCoordinator(builder.prepareInit, builder.source))
+
+      def buildIndexer: ActorRef = {
+        implicit val failuresLog: IndexFailuresLog[Task]   = IndexFailuresLog(indexConfig.name)
+        implicit val projection: ResumableProjection[Task] = ResumableProjection(indexConfig.name)
+
+        val streamByTag: StreamByTag[Task, Offset] = new PersistentStreamByTag(indexConfig)
+        TestActorRef(new StreamCoordinator(streamByTag.fetchInit, streamByTag.source))
+      }
+    }
+
+    "index existing events" in new Context[Event](name = "agg", tag = "executed") {
+      val indexer = buildIndexer
+      agg.append("first", Fixture.Executed).unsafeRunAsyncAndForget()
 
       eventually {
         count.get shouldEqual 1L
@@ -133,11 +159,11 @@ class SequentialTagIndexerSpec
       expectTerminated(indexer)
     }
 
-    "recover from temporary failures on init function" in new Context[Event]("something") {
+    "recover from temporary failures on init function" in new Context[Event](name = "something", tag = "yetanother") {
 
       val initCalled = new AtomicLong(0L)
 
-      def initFail(init: AtomicLong): Task[Unit] =
+      override def initFunction(init: AtomicLong): Task[Unit] =
         Task.deferFuture {
           if (initCalled.compareAndSet(0L, 1L) || initCalled.compareAndSet(1L, 2L))
             Future.failed(new RetriableErr("recoverable error"))
@@ -147,18 +173,9 @@ class SequentialTagIndexerSpec
           }
         }
 
-      agg.append("a", Fixture.YetAnotherExecuted).unsafeRunAsyncAndForget()
+      val indexer = buildIndexer
 
-      val config = fromConfig
-        .name(projId)
-        .plugin(pluginId)
-        .tag("yetanother")
-        .index(index)
-        .init(initFail(init))
-        .retry[RetriableErr](Linear(100 millis, 1 second, maxRetries = 3))
-        .build
-      val builder = new PersistentSourceBuilder(config)
-      val indexer = TestActorRef(new StreamCoordinator(builder.prepareInit, builder.source))
+      agg.append("a", Fixture.YetAnotherExecuted).unsafeRunAsyncAndForget()
 
       eventually {
         initCalled.get shouldEqual 2L
@@ -171,7 +188,8 @@ class SequentialTagIndexerSpec
       expectTerminated(indexer)
     }
 
-    "select only the configured event types" in new Context[Event](name = "selected", batch = 2) {
+    "select only the configured event types" in new Context[Event](name = "selected", batch = 2, tag = "other") {
+      val indexer = buildIndexer
       agg.append("first", Fixture.Executed).unsafeRunAsyncAndForget()
       agg.append("second", Fixture.Executed).unsafeRunAsyncAndForget()
       agg.append("third", Fixture.Executed).unsafeRunAsyncAndForget()
@@ -179,19 +197,6 @@ class SequentialTagIndexerSpec
       agg.append("selected2", Fixture.OtherExecuted).unsafeRunAsyncAndForget()
       agg.append("selected3", Fixture.OtherExecuted).unsafeRunAsyncAndForget()
       agg.append("selected4", Fixture.OtherExecuted).unsafeRunAsyncAndForget()
-
-      val config =
-        fromConfig
-          .name(projId)
-          .plugin(pluginId)
-          .tag("other")
-          .index(index)
-          .batch(2)
-          .init(initFunction(init))
-          .retry[RetriableErr](Linear(100 millis, 1 second, maxRetries = 3))
-          .build
-      val builder = new PersistentSourceBuilder(config)
-      val indexer = TestActorRef(new StreamCoordinator(builder.prepareInit, builder.source))
 
       eventually {
         count.get shouldEqual 2L
@@ -203,19 +208,9 @@ class SequentialTagIndexerSpec
       expectTerminated(indexer)
     }
 
-    "restart the indexing if the Done is emitted" in new Context[Event]("agg2") {
+    "restart the indexing if the Done is emitted" in new Context[Event](name = "agg2", tag = "another") {
+      val indexer = buildIndexer
       agg.append("first", Fixture.AnotherExecuted).unsafeRunAsyncAndForget()
-
-      val config = fromConfig
-        .name(projId)
-        .plugin(pluginId)
-        .tag("another")
-        .index(index)
-        .init(initFunction(init))
-        .retry[RetriableErr](Linear(100 millis, 1 second, maxRetries = 3))
-        .build
-      val builder = new PersistentSourceBuilder(config)
-      val indexer = TestActorRef(new StreamCoordinator(builder.prepareInit, builder.source))
 
       eventually {
         count.get shouldEqual 1L
@@ -235,22 +230,13 @@ class SequentialTagIndexerSpec
       expectTerminated(indexer)
     }
 
-    "retry when index function fails" in new Context[RetryExecuted.type]("retry") {
-      agg.append("retry", Fixture.RetryExecuted).unsafeRunAsyncAndForget()
-
+    "retry when index function fails" in new Context[RetryExecuted.type](name = "retry", tag = "retry") {
       override val index =
-        (_: List[RetryExecuted.type]) => Task.deferFuture(Future.failed[Unit](SomeError(count.incrementAndGet())))
+        (_: List[EventTransform]) => Task.deferFuture(Future.failed[Unit](SomeError(count.incrementAndGet())))
 
-      val config = fromConfig
-        .name(projId)
-        .plugin(pluginId)
-        .tag("retry")
-        .index(index)
-        .init(initFunction(init))
-        .retry[RetriableErr](Linear(100 millis, 1 second, maxRetries = 3))
-        .build
-      val builder = new PersistentSourceBuilder(config)
-      val indexer = TestActorRef(new StreamCoordinator(builder.prepareInit, builder.source))
+      val indexer = buildIndexer
+
+      agg.append("retry", Fixture.RetryExecuted).unsafeRunAsyncAndForget()
 
       eventually {
         count.get shouldEqual 4
@@ -268,23 +254,13 @@ class SequentialTagIndexerSpec
       expectTerminated(indexer)
     }
 
-    "not retry when index function fails with a non RetriableErr" in new Context[IgnoreExecuted.type]("ignore") {
-      agg.append("ignore", Fixture.IgnoreExecuted).unsafeRunAsyncAndForget()
-
+    "not retry when index function fails with a non RetriableErr" in new Context[IgnoreExecuted.type]("ignore",
+                                                                                                      tag = "ignore") {
       override val index =
-        (_: List[IgnoreExecuted.type]) => Task.deferFuture(Future.failed(SomeOtherError(count.incrementAndGet())))
+        (_: List[EventTransform]) => Task.deferFuture(Future.failed(SomeOtherError(count.incrementAndGet())))
 
-      val config = fromConfig
-        .name(projId)
-        .plugin(pluginId)
-        .tag("ignore")
-        .index(index)
-        .init(initFunction(init))
-        .retry[RetriableErr](Linear(100 millis, 1 second, maxRetries = 3))
-        .build
-
-      val builder = new PersistentSourceBuilder(config)
-      val indexer = TestActorRef(new StreamCoordinator(builder.prepareInit, builder.source))
+      val indexer = buildIndexer
+      agg.append("ignore", Fixture.IgnoreExecuted).unsafeRunAsyncAndForget()
 
       eventually {
         count.get shouldEqual 1L

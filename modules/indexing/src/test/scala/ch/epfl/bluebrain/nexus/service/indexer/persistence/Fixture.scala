@@ -14,6 +14,14 @@ object Fixture {
   final case object RetryExecuted      extends Event
   final case object IgnoreExecuted     extends Event
 
+  sealed trait EventTransform
+  final case object ExecutedTransform           extends EventTransform
+  final case object OtherExecutedTransform      extends EventTransform
+  final case object AnotherExecutedTransform    extends EventTransform
+  final case object YetAnotherExecutedTransform extends EventTransform
+  final case object RetryExecutedTransform      extends EventTransform
+  final case object IgnoreExecutedTransform     extends EventTransform
+
   sealed trait Cmd
   final case object Execute           extends Cmd
   final case object ExecuteOther      extends Cmd
