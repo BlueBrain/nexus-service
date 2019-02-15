@@ -63,9 +63,9 @@ object StreamByTag {
 
     private[indexer] implicit val log                  = Logging(as, SequentialTagIndexer.getClass)
     private[indexer] implicit val retry: Retry[F, Err] = config.retry
-    private[indexer] type IdentifiedMapEvt = (String, MappedEvt)
+    private[indexer] type IdentifiedEvent = (String, Event, MappedEvt)
 
-    private[indexer] def batchedSource(initialOffset: Offset): Source[(Offset, List[IdentifiedMapEvt]), NotUsed] = {
+    private[indexer] def batchedSource(initialOffset: Offset): Source[(Offset, List[IdentifiedEvent]), NotUsed] = {
       val eventsByTag =
         PersistenceQuery(as).readJournalFor[EventsByTagQuery](config.pluginId).eventsByTag(config.tag, initialOffset)
       val eventsCasted = eventsByTag.flatMapConcat {
@@ -82,16 +82,32 @@ object StreamByTag {
       val eventsMapped = eventsCasted
         .mapAsync(1) {
           case (offset, id, event) =>
-            val mapped = config.mapping(event).map((offset, id, _))
+            val mapped = config
+              .mapping(event)
+              .retry
+              .map {
+                case Some(evtMapped) => Some((offset, id, event, evtMapped))
+                case None =>
+                  log.warning("Indexing event with id '{}' and value '{}' failed '{}'", id, event, "Mapping failed")
+                  None
+              }
+              .recoverWith(logError(id, event))
             F.toIO(mapped).unsafeToFuture()
         }
-        .collect { case (off, id, Some(mappedEvent)) => (off, id, mappedEvent) }
+        .collect { case Some(value) => value }
 
       val eventsBatched = eventsMapped.groupedWithin(config.batch, config.batchTo).filter(_.nonEmpty).map { batched =>
-        val offset = batched.lastOption.map { case (off, _, _) => off }.getOrElse(NoOffset)
-        (offset, batched.map { case (_, id, event) => id -> event }.toList)
+        val offset = batched.lastOption.map { case (off, _, _, _) => off }.getOrElse(NoOffset)
+        (offset, batched.map { case (_, id, event, mappedEvent) => (id, event, mappedEvent) }.toList)
       }
       eventsBatched
+    }
+
+    private def logError(id: String,
+                         event: Event): PartialFunction[Throwable, F[Option[(Offset, String, Event, MappedEvt)]]] = {
+      case err =>
+        log.error(err, "Indexing event with id '{}' and value '{}' failed '{}'", id, event, err.getMessage)
+        F.pure(None)
     }
 
   }
@@ -104,7 +120,7 @@ object StreamByTag {
     * +----------------------------+    +--------------+    +--------------+    +---------------+    +---------------+    +----------------------+
     *
     */
-  final class PersistentStreamByTag[F[_], Event, MappedEvt: Encoder, Err](
+  final class PersistentStreamByTag[F[_], Event: Encoder, MappedEvt, Err](
       config: IndexerConfig[F, Event, MappedEvt, Err, Persist])(implicit failureLog: IndexFailuresLog[F],
                                                                 projection: ResumableProjection[F],
                                                                 F: Effect[F],
@@ -124,7 +140,7 @@ object StreamByTag {
       val eventsIndexed = batchedSource(initialOffset).mapAsync(1) {
         case (offset, events) =>
           val index =
-            config.index(events.map { case (_, event) => event }).retry.recoverWith(recoverIndex(offset, events))
+            config.index(events.map { case (_, _, mapped) => mapped }).retry.recoverWith(recoverIndex(offset, events))
           F.toIO(index.map(_ => offset)).unsafeToFuture()
       }
       val eventsStoredProgress = eventsIndexed.mapAsync(1) { offset =>
@@ -133,10 +149,10 @@ object StreamByTag {
       eventsStoredProgress
     }
 
-    private def recoverIndex(offset: Offset, events: List[IdentifiedMapEvt]): PartialFunction[Throwable, F[Unit]] = {
+    private def recoverIndex(offset: Offset, events: List[IdentifiedEvent]): PartialFunction[Throwable, F[Unit]] = {
       case err =>
         events.traverse {
-          case (id, event) =>
+          case (id, event, _) =>
             log.error(err, "Indexing event with id '{}' and value '{}' failed'{}'", id, event, err.getMessage)
             failureLog.storeEvent(id, offset, event)
         } *> F.unit
@@ -166,17 +182,21 @@ object StreamByTag {
         .mapAsync(1) {
           case (offset, events) =>
             val index =
-              config.index(events.map { case (_, event) => event }).retry.recoverWith(logError(events)).map(_ => offset)
+              config
+                .index(events.map { case (_, _, mapped) => mapped })
+                .retry
+                .recoverWith(logError(events))
+                .map(_ => offset)
             F.toIO(index).unsafeToFuture()
         }
       eventsIndexed
     }
 
-    private def logError(events: List[IdentifiedMapEvt]): PartialFunction[Throwable, F[Unit]] = {
+    private def logError(events: List[IdentifiedEvent]): PartialFunction[Throwable, F[Unit]] = {
       case err =>
         events.foreach {
-          case (id, event) =>
-            log.error(err, "Indexing event with id '{}' and value '{}' failed'{}'", id, event, err.getMessage)
+          case (id, event, _) =>
+            log.error(err, "Indexing event with id '{}' and value '{}' failed '{}'", id, event, err.getMessage)
         }
         F.unit
     }

@@ -25,7 +25,6 @@ object SequentialTagIndexer {
     * The offset and the failures are NOT persisted once computed the index function.
     *
     * @param config the index configuration which holds the necessary information to start the tag indexer
-    * @tparam Event the event type
     */
   final def start[F[_]: Effect, Event: Typeable, MappedEvt, Err](
       config: IndexerConfig[F, Event, MappedEvt, Err, Volatile])(implicit as: ActorSystem, sc: Scheduler): ActorRef = {
@@ -38,9 +37,8 @@ object SequentialTagIndexer {
     * The offset and the failures are persisted once computed the index function.
     *
     * @param config the index configuration which holds the necessary information to start the tag indexer
-    * @tparam Event the event type
     */
-  final def start[F[_]: Effect, Event: Typeable, MappedEvt: Encoder, Err](
+  final def start[F[_]: Effect, Event: Typeable: Encoder, MappedEvt, Err](
       config: IndexerConfig[F, Event, MappedEvt, Err, Persist])(implicit failureLog: IndexFailuresLog[F],
                                                                 projection: ResumableProjection[F],
                                                                 as: ActorSystem,
@@ -49,7 +47,13 @@ object SequentialTagIndexer {
     StreamCoordinator.start(streamByTag.fetchInit, streamByTag.source, config.name)
   }
 
-  final def start[Event: Typeable, MappedEvt: Encoder, Err](
+  /**
+    * Type indexer on [[Task]] effect type  that iterates over the collection of events selected via the specified tag.
+    * The offset and the failures are persisted once computed the index function.
+    *
+    * @param config the index configuration which holds the necessary information to start the tag indexer
+    */
+  final def start[Event: Typeable: Encoder, MappedEvt, Err](
       config: IndexerConfig[Task, Event, MappedEvt, Err, Persist])(implicit
                                                                    as: ActorSystem,
                                                                    sc: Scheduler): ActorRef = {
@@ -57,5 +61,4 @@ object SequentialTagIndexer {
     implicit val failureLog: IndexFailuresLog[Task]    = IndexFailuresLog(config.name)
     start[Task, Event, MappedEvt, Err](config)
   }
-  // $COVERAGE-ON$
 }
