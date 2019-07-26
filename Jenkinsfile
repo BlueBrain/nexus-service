@@ -1,6 +1,8 @@
 pipeline {
     agent none
-
+    tools {
+        jdk 'jdk11'
+    }
     stages {
         stage("Review") {
             when {
